@@ -33,6 +33,7 @@ func main() {
 		"registry": cmdRegistry,
 		"suspend":  cmdSuspend,
 		"resume":   cmdResume,
+		"info":     cmdInfo,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -63,7 +64,8 @@ Usage:
   uran registry rm   --org ID --id CRED_ID
   uran whoami
   uran deploy   --service ID [--commit SHA | --image REF]
-  uran status   --deploy ID
+  uran status   --deploy ID | --project ID
+  uran info     --service ID
   uran logs     --deploy ID | --service ID
   uran metrics  --service ID
   uran audit

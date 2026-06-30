@@ -195,9 +195,13 @@ func cmdDeploy(args []string) error {
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	deployID := fs.Int64("deploy", 0, "deploy id")
+	project := fs.Int64("project", 0, "project id (status of all its services)")
 	_ = fs.Parse(args)
+	if *project != 0 {
+		return cmdServiceStatus(*project)
+	}
 	if *deployID == 0 {
-		return fmt.Errorf("usage: uran status --deploy ID")
+		return fmt.Errorf("usage: uran status --deploy ID | --project ID")
 	}
 	c, err := authed()
 	if err != nil {
@@ -721,6 +725,59 @@ func cmdMemberRm(args []string) error {
 		return err
 	}
 	fmt.Printf("removed user %d\n", *user)
+	return nil
+}
+
+// cmdServiceStatus prints each service's latest deploy status in a project.
+func cmdServiceStatus(project int64) error {
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var statuses []struct {
+		ServiceID int64  `json:"service_id"`
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		Suspended bool   `json:"suspended"`
+		Status    string `json:"status"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/projects/%d/status", project), nil, &statuses); err != nil {
+		return err
+	}
+	for _, st := range statuses {
+		s := st.Status
+		if st.Suspended {
+			s = "suspended"
+		}
+		fmt.Printf("%-4d %-22s %-8s %s\n", st.ServiceID, st.Name, st.Type, s)
+	}
+	return nil
+}
+
+// cmdInfo prints a service's details including its internal cluster host.
+func cmdInfo(args []string) error {
+	fs := flag.NewFlagSet("info", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran info --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var d struct {
+		Name         string `json:"name"`
+		Type         string `json:"type"`
+		InternalHost string `json:"internal_host"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/services/%d", *service), nil, &d); err != nil {
+		return err
+	}
+	fmt.Printf("%s (%s)\n", d.Name, d.Type)
+	if d.InternalHost != "" {
+		fmt.Printf("internal host: %s  (reachable from other services in the project)\n", d.InternalHost)
+	}
 	return nil
 }
 

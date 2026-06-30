@@ -74,6 +74,8 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/v1/projects/{projectID}/services", s.handleListServices)
 		r.Post("/v1/projects/{projectID}/services", s.handleCreateService)
+		r.Get("/v1/projects/{projectID}/status", s.handleProjectStatus)
+		r.Get("/v1/services/{serviceID}", s.handleGetService)
 
 		r.Get("/v1/services/{serviceID}/deploys", s.handleListDeploys)
 		r.Post("/v1/services/{serviceID}/deploys", s.handleCreateDeploy)
