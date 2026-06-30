@@ -8,15 +8,16 @@ import (
 )
 
 // Dispatcher routes a build to the right backend based on the service type:
-// static sites use the nginx StaticBuilder; everything else uses Nixpacks.
+// static sites use the nginx StaticBuilder; everything else uses the code
+// builder (Dockerfile or Nixpacks).
 type Dispatcher struct {
-	nixpacks Builder
-	static   Builder
+	code   Builder
+	static Builder
 }
 
 // NewDispatcher wires the per-type build backends.
-func NewDispatcher(nixpacks, static Builder) *Dispatcher {
-	return &Dispatcher{nixpacks: nixpacks, static: static}
+func NewDispatcher(code, static Builder) *Dispatcher {
+	return &Dispatcher{code: code, static: static}
 }
 
 // Build selects the backend for req.Type and delegates.
@@ -24,7 +25,7 @@ func (d *Dispatcher) Build(ctx context.Context, req Request, logs io.Writer) (Re
 	if req.Type == svctype.Static {
 		return d.static.Build(ctx, req, logs)
 	}
-	return d.nixpacks.Build(ctx, req, logs)
+	return d.code.Build(ctx, req, logs)
 }
 
 var _ Builder = (*Dispatcher)(nil)
