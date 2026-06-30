@@ -82,6 +82,7 @@ func (p *Processor) process(ctx context.Context, deployID int64) {
 		RepoURL: svc.RepoURL,
 		Ref:     d.CommitSHA,
 		Image:   image,
+		Type:    svc.Type,
 	}, logs)
 
 	if buildErr != nil {
