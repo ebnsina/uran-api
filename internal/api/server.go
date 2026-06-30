@@ -82,6 +82,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/services/{serviceID}/image-deploys", s.handleImageDeploy)
 		r.Get("/v1/services/{serviceID}/runtime-logs", s.handleRuntimeLogs)
 		r.Get("/v1/services/{serviceID}/metrics", s.handleMetrics)
+		r.Get("/v1/services/{serviceID}/usage", s.handleServiceUsage)
 		r.Get("/v1/deploys/{deployID}", s.handleGetDeploy)
 		r.Get("/v1/deploys/{deployID}/logs", s.handleDeployLogs)
 		r.Post("/v1/deploys/{deployID}/rollback", s.handleRollback)

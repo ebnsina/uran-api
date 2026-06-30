@@ -781,6 +781,32 @@ func cmdInfo(args []string) error {
 	return nil
 }
 
+// cmdUsage prints a service's metered usage rollup.
+func cmdUsage(args []string) error {
+	fs := flag.NewFlagSet("usage", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran usage --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var u struct {
+		SampleCount   int     `json:"sample_count"`
+		WindowSeconds int     `json:"window_seconds"`
+		CPUCoreSec    float64 `json:"cpu_core_seconds"`
+		AvgMemoryMB   int64   `json:"avg_memory_mb"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/services/%d/usage", *service), nil, &u); err != nil {
+		return err
+	}
+	fmt.Printf("window: %ds (%d samples)\nCPU: %.1f core-seconds\nmemory: %d MB avg\n",
+		u.WindowSeconds, u.SampleCount, u.CPUCoreSec, u.AvgMemoryMB)
+	return nil
+}
+
 // cmdScale updates a service's replicas, instance size, and autoscaling bounds.
 func cmdScale(args []string) error {
 	fs := flag.NewFlagSet("scale", flag.ExitOnError)

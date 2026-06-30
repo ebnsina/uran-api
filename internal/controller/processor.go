@@ -80,6 +80,7 @@ func (p *Processor) Run(ctx context.Context) error {
 		})
 	})
 	g.Go(func() error { return p.runDBAutoscaler(ctx) })
+	g.Go(func() error { return p.runUsageSampler(ctx) })
 	return g.Wait()
 }
 

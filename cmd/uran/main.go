@@ -34,6 +34,7 @@ func main() {
 		"suspend":  cmdSuspend,
 		"resume":   cmdResume,
 		"info":     cmdInfo,
+		"usage":    cmdUsage,
 	}
 
 	cmd, ok := commands[os.Args[1]]
