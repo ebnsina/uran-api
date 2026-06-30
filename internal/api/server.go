@@ -48,8 +48,10 @@ func (s *Server) Router() http.Handler {
 	// Authenticated endpoints.
 	r.Group(func(r chi.Router) {
 		r.Use(s.auth.Middleware)
+		r.Use(s.auditMiddleware)
 		r.Post("/v1/auth/logout", s.handleLogout)
 		r.Get("/v1/me", s.handleMe)
+		r.Get("/v1/audit", s.handleListAudit)
 
 		r.Get("/v1/tokens", s.handleListTokens)
 		r.Post("/v1/tokens", s.handleCreateToken)
