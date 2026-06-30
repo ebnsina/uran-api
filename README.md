@@ -1,6 +1,6 @@
 # uran-api
 
-The Go control plane for **Uran**, a Render-style platform-as-a-service: push to
+The Go control plane for **Uran**, a Git-driven platform-as-a-service: push to
 Git → automatic build → running, routed service. This repo holds the API, build
 worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 `uran-web`.
@@ -95,7 +95,7 @@ uran domain add  --service 3 app.example.com
 uran domain list --service 3
 uran db create     --project 1 maindb            # or --engine redis
 uran db create     --project 1 --instances 2 --size medium --storage 5Gi hadb
-uran db create     --project 1 --tier autoscale --min 1 --max 3 neon  # autoscaling
+uran db create     --project 1 --tier autoscale --min 1 --max 3 appdb  # autoscaling
 uran db scale      --database 1 --instances 3 --size large
 uran db connection --database 1                  # prints rw + read URIs
 uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4
