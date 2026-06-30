@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -25,14 +27,18 @@ const servicePort = 8080
 
 // Processor reconciles built deploys onto the cluster.
 type Processor struct {
-	store *store.Store
-	recon *k8s.Reconciler
-	log   *slog.Logger
+	store     *store.Store
+	recon     *k8s.Reconciler
+	reader    *k8s.Reader
+	log       *slog.Logger
+	lastScale map[int64]time.Time // db id -> last autoscale time
+	scaleMu   sync.Mutex
 }
 
-// New constructs a Processor.
-func New(st *store.Store, recon *k8s.Reconciler, log *slog.Logger) *Processor {
-	return &Processor{store: st, recon: recon, log: log}
+// New constructs a Processor. reader provides metrics for the database
+// autoscaler.
+func New(st *store.Store, recon *k8s.Reconciler, reader *k8s.Reader, log *slog.Logger) *Processor {
+	return &Processor{store: st, recon: recon, reader: reader, log: log, lastScale: map[int64]time.Time{}}
 }
 
 // Run listens on the deployment and teardown channels concurrently until ctx is
@@ -73,6 +79,7 @@ func (p *Processor) Run(ctx context.Context) error {
 			go p.teardownDatabase(ctx, payload)
 		})
 	})
+	g.Go(func() error { return p.runDBAutoscaler(ctx) })
 	return g.Wait()
 }
 

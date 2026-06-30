@@ -269,24 +269,35 @@ func cmdDBCreate(args []string) error {
 	fs := flag.NewFlagSet("db create", flag.ExitOnError)
 	project := fs.Int64("project", 0, "project id")
 	engine := fs.String("engine", "postgres", "engine: postgres|redis")
-	instances := fs.Int("instances", 1, "number of nodes (postgres HA when >1)")
+	tier := fs.String("tier", "standard", "tier: standard|autoscale")
+	instances := fs.Int("instances", 1, "standard: number of nodes (HA when >1)")
+	min := fs.Int("min", 1, "autoscale: min instances")
+	max := fs.Int("max", 3, "autoscale: max instances")
 	size := fs.String("size", "small", "instance size: small|medium|large")
 	storage := fs.String("storage", "1Gi", "disk size, e.g. 5Gi")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *project == 0 || len(rest) != 1 {
-		return fmt.Errorf("usage: uran db create --project ID [--engine postgres|redis] [--instances N --size S --storage G] NAME")
+		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] NAME")
 	}
 	c, err := authed()
 	if err != nil {
 		return err
 	}
 	var db database
-	body := map[string]any{"name": rest[0], "engine": *engine, "instances": *instances, "size": *size, "storage": *storage}
+	body := map[string]any{
+		"name": rest[0], "engine": *engine, "tier": *tier,
+		"instances": *instances, "min_instances": *min, "max_instances": *max,
+		"size": *size, "storage": *storage,
+	}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), body, &db); err != nil {
 		return err
 	}
-	fmt.Printf("creating %s database %d (%dx %s) — check: uran db connection --database %d\n", *engine, db.ID, *instances, db.Status, db.ID)
+	if *tier == "autoscale" {
+		fmt.Printf("creating autoscale %s database %d (%d–%d nodes) — check: uran db connection --database %d\n", *engine, db.ID, *min, *max, db.ID)
+	} else {
+		fmt.Printf("creating %s database %d (%dx %s) — check: uran db connection --database %d\n", *engine, db.ID, *instances, db.Status, db.ID)
+	}
 	return nil
 }
 
