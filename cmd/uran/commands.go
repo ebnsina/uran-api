@@ -132,6 +132,117 @@ type domain struct {
 	Domain string `json:"domain"`
 }
 
+type database struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Slug   string `json:"slug"`
+	Engine string `json:"engine"`
+	Status string `json:"status"`
+}
+
+// cmdDB dispatches database subcommands: create, list, connection, rm.
+func cmdDB(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: uran db <create|list|connection|rm> ...")
+	}
+	switch args[0] {
+	case "create":
+		return cmdDBCreate(args[1:])
+	case "list":
+		return cmdDBList(args[1:])
+	case "connection":
+		return cmdDBConnection(args[1:])
+	case "rm":
+		return cmdDBRm(args[1:])
+	default:
+		return fmt.Errorf("unknown db subcommand %q", args[0])
+	}
+}
+
+func cmdDBCreate(args []string) error {
+	fs := flag.NewFlagSet("db create", flag.ExitOnError)
+	project := fs.Int64("project", 0, "project id")
+	_ = fs.Parse(args)
+	rest := fs.Args()
+	if *project == 0 || len(rest) != 1 {
+		return fmt.Errorf("usage: uran db create --project ID NAME")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var db database
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), map[string]string{"name": rest[0]}, &db); err != nil {
+		return err
+	}
+	fmt.Printf("creating database %d (%s) — check: uran db connection --database %d\n", db.ID, db.Status, db.ID)
+	return nil
+}
+
+func cmdDBList(args []string) error {
+	fs := flag.NewFlagSet("db list", flag.ExitOnError)
+	project := fs.Int64("project", 0, "project id")
+	_ = fs.Parse(args)
+	if *project == 0 {
+		return fmt.Errorf("usage: uran db list --project ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var dbs []database
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/projects/%d/databases", *project), nil, &dbs); err != nil {
+		return err
+	}
+	if len(dbs) == 0 {
+		fmt.Println("(no databases)")
+		return nil
+	}
+	for _, d := range dbs {
+		fmt.Printf("%d  %-20s %-10s %s\n", d.ID, d.Name, d.Engine, d.Status)
+	}
+	return nil
+}
+
+func cmdDBConnection(args []string) error {
+	fs := flag.NewFlagSet("db connection", flag.ExitOnError)
+	id := fs.Int64("database", 0, "database id")
+	_ = fs.Parse(args)
+	if *id == 0 {
+		return fmt.Errorf("usage: uran db connection --database ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		URI string `json:"uri"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/databases/%d/connection", *id), nil, &resp); err != nil {
+		return err
+	}
+	fmt.Println(resp.URI)
+	return nil
+}
+
+func cmdDBRm(args []string) error {
+	fs := flag.NewFlagSet("db rm", flag.ExitOnError)
+	id := fs.Int64("database", 0, "database id")
+	_ = fs.Parse(args)
+	if *id == 0 {
+		return fmt.Errorf("usage: uran db rm --database ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodDelete, fmt.Sprintf("/v1/databases/%d", *id), nil, nil); err != nil {
+		return err
+	}
+	fmt.Printf("deleted database %d\n", *id)
+	return nil
+}
+
 // cmdDomain dispatches domain subcommands: list, add, rm.
 func cmdDomain(args []string) error {
 	if len(args) == 0 {

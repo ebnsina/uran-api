@@ -19,6 +19,13 @@ const DeploymentChannel = "uran_deployments"
 // LISTENs on it to delete the preview's cluster objects.
 const TeardownChannel = "uran_teardowns"
 
+// DatabaseChannel carries IDs of databases to provision (payload "<dbID>").
+const DatabaseChannel = "uran_databases"
+
+// DatabaseTeardownChannel carries databases to deprovision, as the payload
+// "<namespace>:<clusterName>" (the DB row is deleted by the API first).
+const DatabaseTeardownChannel = "uran_db_teardowns"
+
 // Notify publishes a payload on a NOTIFY channel using pg_notify, which (unlike
 // the NOTIFY statement) accepts the channel name as a bind parameter.
 func (s *Store) Notify(ctx context.Context, channel, payload string) error {

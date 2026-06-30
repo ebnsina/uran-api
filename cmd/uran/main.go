@@ -22,6 +22,7 @@ func main() {
 		"rollback": cmdRollback,
 		"env":      cmdEnv,
 		"domain":   cmdDomain,
+		"db":       cmdDB,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -51,5 +52,9 @@ Usage:
   uran domain list --service ID
   uran domain add  --service ID DOMAIN
   uran domain rm   --service ID DOMAIN
+  uran db create     --project ID NAME
+  uran db list       --project ID
+  uran db connection --database ID
+  uran db rm         --database ID
 `)
 }

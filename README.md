@@ -10,6 +10,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 - **Git-driven deploys** — connect a repo; pushes build and ship automatically.
 - **Multiple service types** — HTTP web services, background workers (no inbound
   routing), and scheduled cron jobs.
+- **Managed databases** — provision a Postgres instance per project
+  (CloudNativePG); apps connect via an in-namespace connection URI.
 - **Zero-config builds** — [Nixpacks](https://nixpacks.com) detects the stack;
   images are cached and pushed to a registry.
 - **Kubernetes runtime** — each deploy is reconciled into a Deployment, Service,
@@ -69,6 +71,8 @@ uran env list --service 3
 uran rollback --deploy 5                  # redeploy a prior image (no rebuild)
 uran domain add  --service 3 app.example.com
 uran domain list --service 3
+uran db create     --project 1 maindb
+uran db connection --database 1
 ```
 
 ## API
@@ -91,6 +95,9 @@ uran domain list --service 3
 | DELETE | `/v1/services/{serviceID}/env/{key}` | bearer | Remove an env var |
 | GET/POST | `/v1/services/{serviceID}/domains` | bearer | List / add custom domains |
 | DELETE | `/v1/services/{serviceID}/domains/{domain}` | bearer | Remove a custom domain |
+| GET/POST | `/v1/projects/{projectID}/databases` | bearer | List / create managed databases |
+| GET/DELETE | `/v1/databases/{databaseID}` | bearer | Get / delete a database |
+| GET | `/v1/databases/{databaseID}/connection` | bearer | Connection URI (when ready) |
 | POST | `/v1/webhooks/github` | HMAC | GitHub push / pull_request events |
 
 Authenticated requests send `Authorization: Bearer <token>`. The webhook is

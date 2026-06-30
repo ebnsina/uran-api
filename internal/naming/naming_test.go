@@ -25,3 +25,9 @@ func TestWorkloadName(t *testing.T) {
 		t.Errorf("preview without pr = %q, want web", got)
 	}
 }
+
+func TestDatabaseCluster(t *testing.T) {
+	if got := DatabaseCluster("maindb"); got != "db-maindb" {
+		t.Errorf("DatabaseCluster = %q, want db-maindb", got)
+	}
+}
