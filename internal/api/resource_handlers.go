@@ -75,15 +75,12 @@ func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request) {
 
 // requireOrgMember resolves the {orgID} path param and verifies membership.
 func (s *Server) requireOrgMember(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	u, _ := auth.UserFrom(r.Context())
 	orgID, ok := pathInt(r, "orgID")
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid org id")
 		return 0, false
 	}
-	member, err := s.store.IsOrgMember(r.Context(), u.ID, orgID)
-	if err != nil || !member {
-		writeError(w, http.StatusForbidden, "not a member of this org")
+	if _, ok := s.authorizeOrg(w, r, orgID); !ok {
 		return 0, false
 	}
 	return orgID, true
@@ -127,7 +124,6 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 // requireProjectAccess resolves {projectID} and verifies the user is a member
 // of the owning org.
 func (s *Server) requireProjectAccess(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	u, _ := auth.UserFrom(r.Context())
 	projectID, ok := pathInt(r, "projectID")
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid project id")
@@ -138,9 +134,7 @@ func (s *Server) requireProjectAccess(w http.ResponseWriter, r *http.Request) (i
 		writeError(w, http.StatusNotFound, "project not found")
 		return 0, false
 	}
-	member, err := s.store.IsOrgMember(r.Context(), u.ID, p.OrgID)
-	if err != nil || !member {
-		writeError(w, http.StatusForbidden, "no access to this project")
+	if _, ok := s.authorizeOrg(w, r, p.OrgID); !ok {
 		return 0, false
 	}
 	return projectID, true

@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ebnsina/uran-api/internal/auth"
 	"github.com/ebnsina/uran-api/internal/k8s"
 	"github.com/ebnsina/uran-api/internal/naming"
 	"github.com/ebnsina/uran-api/internal/store"
@@ -16,7 +15,6 @@ import (
 // requireServiceWithOrg resolves {serviceID}, verifies org membership, and
 // returns the service plus its org id (needed to locate cluster objects).
 func (s *Server) requireServiceWithOrg(w http.ResponseWriter, r *http.Request) (store.Service, int64, bool) {
-	u, _ := auth.UserFrom(r.Context())
 	id, err := strconv.ParseInt(chi.URLParam(r, "serviceID"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid service id")
@@ -27,9 +25,7 @@ func (s *Server) requireServiceWithOrg(w http.ResponseWriter, r *http.Request) (
 		writeError(w, http.StatusNotFound, "service not found")
 		return store.Service{}, 0, false
 	}
-	member, err := s.store.IsOrgMember(r.Context(), u.ID, orgID)
-	if err != nil || !member {
-		writeError(w, http.StatusForbidden, "no access to this service")
+	if _, ok := s.authorizeOrg(w, r, orgID); !ok {
 		return store.Service{}, 0, false
 	}
 	return svc, orgID, true
