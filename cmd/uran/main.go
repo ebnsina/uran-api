@@ -29,6 +29,7 @@ func main() {
 		"metrics":  cmdMetrics,
 		"token":    cmdToken,
 		"member":   cmdMember,
+		"audit":    cmdAudit,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -59,6 +60,7 @@ Usage:
   uran status   --deploy ID
   uran logs     --deploy ID | --service ID
   uran metrics  --service ID
+  uran audit
   uran rollback --deploy ID
   uran env list    --service ID
   uran env set     --service ID [--secret] KEY=VALUE

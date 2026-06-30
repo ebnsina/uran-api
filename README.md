@@ -31,6 +31,7 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   data survives restarts and redeploys.
 - **Team roles (RBAC)** — owner / admin / member / viewer, with viewer
   read-only and admin/owner-gated member management.
+- **Audit log** — every mutating action is recorded (who, what, when, result).
 - **API tokens** — issue personal access tokens for CI and programmatic access.
 - **Observability** — stream live runtime logs and read per-pod CPU/memory.
 - **Instant rollback** — redeploy any previous image without rebuilding.
@@ -104,6 +105,7 @@ uran metrics --service 3                  # per-pod CPU/memory
 | POST | `/v1/auth/login` | – | Authenticate → `{token,user}` |
 | POST | `/v1/auth/logout` | bearer | Revoke session |
 | GET  | `/v1/me` | bearer | Current user |
+| GET  | `/v1/audit` | bearer | Recent audited actions |
 | GET/POST | `/v1/tokens` | bearer | List / create API tokens |
 | DELETE | `/v1/tokens/{tokenID}` | bearer | Revoke an API token |
 | GET/POST | `/v1/orgs` | bearer | List / create orgs |

@@ -435,6 +435,37 @@ type podMetric struct {
 	MemoryBytes   int64  `json:"memory_bytes"`
 }
 
+type auditEntry struct {
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Status    int    `json:"status"`
+	CreatedAt string `json:"created_at"`
+}
+
+// cmdAudit prints the caller's recent audited actions.
+func cmdAudit(args []string) error {
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var entries []auditEntry
+	if err := c.do(context.Background(), http.MethodGet, "/v1/audit", nil, &entries); err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		fmt.Println("(no audited actions)")
+		return nil
+	}
+	for _, e := range entries {
+		ts := e.CreatedAt
+		if len(ts) >= 19 {
+			ts = ts[:19]
+		}
+		fmt.Printf("%s  %-6s %d  %s\n", ts, e.Method, e.Status, e.Path)
+	}
+	return nil
+}
+
 // cmdMetrics prints current CPU/memory usage per pod for a service.
 func cmdMetrics(args []string) error {
 	fs := flag.NewFlagSet("metrics", flag.ExitOnError)
