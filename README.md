@@ -25,7 +25,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   its own hostname, torn down when the PR closes.
 - **Custom domains & automatic TLS** — attach your own hostnames; certificates
   are provisioned by cert-manager and served over HTTPS.
-- **Env vars & secrets** — injected into workloads via per-service Secrets.
+- **Env vars & secrets** — injected into workloads via per-service Secrets;
+  mark a var build-time to also pass it as a build arg.
 - **Scaling & autoscaling** — set replica count and instance size, or autoscale
   on CPU (HPA), with readiness/liveness health checks gating rollouts.
 - **Persistent disks** — attach a volume to a service for stateful workloads;
@@ -84,6 +85,7 @@ uran deploy   --service 3 --image registry/app:1.2.3   # deploy a prebuilt image
 uran logs     --deploy 6                  # stream build logs
 uran status   --deploy 6
 uran env set  --service 3 --secret API_KEY=xyz
+uran env set  --service 3 --build NODE_ENV=production    # also a build arg
 uran env list --service 3
 uran rollback --deploy 5                  # redeploy a prior image (no rebuild)
 uran domain add  --service 3 app.example.com

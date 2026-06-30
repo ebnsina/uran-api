@@ -748,17 +748,18 @@ func cmdEnvSet(args []string) error {
 	fs := flag.NewFlagSet("env set", flag.ExitOnError)
 	service := fs.Int64("service", 0, "service id")
 	secret := fs.Bool("secret", false, "mark the value as secret")
+	build := fs.Bool("build", false, "also expose as a build arg")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *service == 0 || len(rest) != 1 || !strings.Contains(rest[0], "=") {
-		return fmt.Errorf("usage: uran env set --service ID [--secret] KEY=VALUE")
+		return fmt.Errorf("usage: uran env set --service ID [--secret] [--build] KEY=VALUE")
 	}
 	key, value, _ := strings.Cut(rest[0], "=")
 	c, err := authed()
 	if err != nil {
 		return err
 	}
-	body := map[string]any{"key": key, "value": value, "secret": *secret}
+	body := map[string]any{"key": key, "value": value, "secret": *secret, "build_time": *build}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/env", *service), body, nil); err != nil {
 		return err
 	}

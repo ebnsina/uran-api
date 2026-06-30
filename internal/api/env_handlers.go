@@ -11,9 +11,10 @@ import (
 )
 
 type setEnvReq struct {
-	Key    string `json:"key"`
-	Value  string `json:"value"`
-	Secret bool   `json:"secret"`
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	Secret    bool   `json:"secret"`
+	BuildTime bool   `json:"build_time"`
 }
 
 func (s *Server) handleSetEnv(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +27,7 @@ func (s *Server) handleSetEnv(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "key required")
 		return
 	}
-	if err := s.store.SetEnvVar(r.Context(), svc.ID, req.Key, req.Value, req.Secret); err != nil {
+	if err := s.store.SetEnvVar(r.Context(), svc.ID, req.Key, req.Value, req.Secret, req.BuildTime); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not set env var")
 		return
 	}

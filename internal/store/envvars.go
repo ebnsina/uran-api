@@ -4,19 +4,20 @@ import "context"
 
 // EnvVar is a service environment variable.
 type EnvVar struct {
-	Key    string `json:"key"`
-	Value  string `json:"value"`
-	Secret bool   `json:"secret"`
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	Secret    bool   `json:"secret"`
+	BuildTime bool   `json:"build_time"`
 }
 
 // SetEnvVar upserts an environment variable for a service.
-func (s *Store) SetEnvVar(ctx context.Context, serviceID int64, key, value string, secret bool) error {
+func (s *Store) SetEnvVar(ctx context.Context, serviceID int64, key, value string, secret, buildTime bool) error {
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO env_vars (service_id, key, value, secret)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO env_vars (service_id, key, value, secret, build_time)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (service_id, key)
-		 DO UPDATE SET value = EXCLUDED.value, secret = EXCLUDED.secret`,
-		serviceID, key, value, secret,
+		 DO UPDATE SET value = EXCLUDED.value, secret = EXCLUDED.secret, build_time = EXCLUDED.build_time`,
+		serviceID, key, value, secret, buildTime,
 	)
 	return err
 }
@@ -24,7 +25,7 @@ func (s *Store) SetEnvVar(ctx context.Context, serviceID int64, key, value strin
 // ListEnvVars returns a service's environment variables ordered by key.
 func (s *Store) ListEnvVars(ctx context.Context, serviceID int64) ([]EnvVar, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT key, value, secret FROM env_vars WHERE service_id = $1 ORDER BY key`,
+		`SELECT key, value, secret, build_time FROM env_vars WHERE service_id = $1 ORDER BY key`,
 		serviceID,
 	)
 	if err != nil {
@@ -34,7 +35,7 @@ func (s *Store) ListEnvVars(ctx context.Context, serviceID int64) ([]EnvVar, err
 	var out []EnvVar
 	for rows.Next() {
 		var e EnvVar
-		if err := rows.Scan(&e.Key, &e.Value, &e.Secret); err != nil {
+		if err := rows.Scan(&e.Key, &e.Value, &e.Secret, &e.BuildTime); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
