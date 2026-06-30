@@ -8,6 +8,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 ## Features
 
 - **Git-driven deploys** — connect a repo; pushes build and ship automatically.
+- **Multiple service types** — HTTP web services, background workers (no inbound
+  routing), and scheduled cron jobs.
 - **Zero-config builds** — [Nixpacks](https://nixpacks.com) detects the stack;
   images are cached and pushed to a registry.
 - **Kubernetes runtime** — each deploy is reconciled into a Deployment, Service,

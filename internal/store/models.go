@@ -33,6 +33,7 @@ type Service struct {
 	Type      string    `json:"type"`
 	RepoURL   string    `json:"repo_url"`
 	Branch    string    `json:"branch"`
+	Schedule  string    `json:"schedule,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
