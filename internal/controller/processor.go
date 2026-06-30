@@ -182,39 +182,48 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 	namespace := naming.NamespaceForOrg(orgID)
 	cluster := naming.DatabaseCluster(db.Slug)
 
-	uri, err := p.provisionEngine(ctx, db.Engine, namespace, cluster)
+	uri, readURI, err := p.provisionEngine(ctx, db, namespace, cluster)
 	if err != nil {
 		log.Error("provision database", "engine", db.Engine, "err", err)
 		p.failDatabase(ctx, log, dbID)
 		return
 	}
-	if err := p.store.SetDatabaseConnection(ctx, dbID, uri); err != nil {
+	if err := p.store.SetDatabaseConnection(ctx, dbID, uri, readURI); err != nil {
 		log.Error("store connection uri", "err", err)
 		return
 	}
-	log.Info("database ready", "engine", db.Engine, "cluster", cluster)
+	log.Info("database ready", "engine", db.Engine, "cluster", cluster, "instances", db.Instances)
 }
 
-// provisionEngine provisions the requested engine and returns its connection
-// URI once ready.
-func (p *Processor) provisionEngine(ctx context.Context, engine, namespace, cluster string) (string, error) {
-	switch engine {
+// provisionEngine provisions the requested engine and returns its read-write
+// and read-only connection URIs once ready (read URI is empty when not HA).
+func (p *Processor) provisionEngine(ctx context.Context, db store.Database, namespace, cluster string) (string, string, error) {
+	switch db.Engine {
 	case "redis":
 		if err := p.recon.ProvisionRedis(ctx, namespace, cluster); err != nil {
-			return "", err
+			return "", "", err
 		}
 		if err := p.recon.WaitRedisReady(ctx, namespace, cluster); err != nil {
-			return "", err
+			return "", "", err
 		}
-		return p.recon.RedisConnectionURI(namespace, cluster), nil
+		return p.recon.RedisConnectionURI(namespace, cluster), "", nil
 	default: // postgres
-		if err := p.recon.ProvisionPostgres(ctx, namespace, cluster); err != nil {
-			return "", err
+		spec := k8s.PostgresSpec{Instances: db.Instances, Size: db.Size, Storage: db.Storage}
+		if err := p.recon.ProvisionPostgres(ctx, namespace, cluster, spec); err != nil {
+			return "", "", err
 		}
 		if err := p.recon.WaitPostgresReady(ctx, namespace, cluster); err != nil {
-			return "", err
+			return "", "", err
 		}
-		return p.recon.PostgresConnectionURI(ctx, namespace, cluster)
+		uri, err := p.recon.PostgresConnectionURI(ctx, namespace, cluster)
+		if err != nil {
+			return "", "", err
+		}
+		var readURI string
+		if db.Instances > 1 {
+			readURI = k8s.PostgresReadURI(uri, cluster)
+		}
+		return uri, readURI, nil
 	}
 }
 

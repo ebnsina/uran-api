@@ -7,13 +7,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/ebnsina/uran-api/internal/instance"
 	"github.com/ebnsina/uran-api/internal/naming"
 	"github.com/ebnsina/uran-api/internal/store"
 )
 
 type createDatabaseReq struct {
-	Name   string `json:"name"`
-	Engine string `json:"engine"`
+	Name      string `json:"name"`
+	Engine    string `json:"engine"`
+	Instances int32  `json:"instances"`
+	Size      string `json:"size"`
+	Storage   string `json:"storage"`
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +38,11 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported engine (postgres|redis)")
 		return
 	}
-	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine)
+	instances, size, storage, ok := s.normalizeDBScaling(w, engine, req.Instances, req.Size, req.Storage)
+	if !ok {
+		return
+	}
+	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, instances, size, storage)
 	if err != nil {
 		writeError(w, http.StatusConflict, "could not create database (slug may be taken)")
 		return
@@ -85,8 +93,9 @@ func (s *Server) handleGetDatabase(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, db)
 }
 
-// handleDatabaseConnection returns the connection URI once the database is
-// ready. The URI contains credentials, so it is only exposed here.
+// handleDatabaseConnection returns the connection URIs once the database is
+// ready. URIs contain credentials, so they are only exposed here. read_uri is
+// present only for HA databases (a load-balanced read-only endpoint).
 func (s *Server) handleDatabaseConnection(w http.ResponseWriter, r *http.Request) {
 	db, _, ok := s.requireDatabaseAccess(w, r)
 	if !ok {
@@ -96,7 +105,75 @@ func (s *Server) handleDatabaseConnection(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusConflict, "database not ready")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"uri": db.ConnectionURI})
+	resp := map[string]string{"uri": db.ConnectionURI}
+	if db.ReadURI != "" {
+		resp["read_uri"] = db.ReadURI
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+type scaleDatabaseReq struct {
+	Instances int32  `json:"instances"`
+	Size      string `json:"size"`
+	Storage   string `json:"storage"`
+}
+
+// handleScaleDatabase changes a database's instances/size/storage and triggers
+// a re-reconcile. Only Postgres supports more than one instance.
+func (s *Server) handleScaleDatabase(w http.ResponseWriter, r *http.Request) {
+	db, _, ok := s.requireDatabaseAccess(w, r)
+	if !ok {
+		return
+	}
+	var req scaleDatabaseReq
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if req.Size == "" {
+		req.Size = db.Size
+	}
+	if req.Storage == "" {
+		req.Storage = db.Storage
+	}
+	if req.Instances == 0 {
+		req.Instances = db.Instances
+	}
+	instances, size, storage, ok := s.normalizeDBScaling(w, db.Engine, req.Instances, req.Size, req.Storage)
+	if !ok {
+		return
+	}
+	if err := s.store.SetDatabaseScaling(r.Context(), db.ID, instances, size, storage); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not scale database")
+		return
+	}
+	if err := s.store.Notify(r.Context(), store.DatabaseChannel, strconv.FormatInt(db.ID, 10)); err != nil {
+		s.log.Warn("notify database scale failed", "database_id", db.ID, "err", err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// normalizeDBScaling validates and defaults scaling inputs. Redis is limited to
+// a single instance (replicas need real clustering).
+func (s *Server) normalizeDBScaling(w http.ResponseWriter, engine string, instances int32, size, storage string) (int32, string, string, bool) {
+	if size == "" {
+		size = instance.Small
+	}
+	if !instance.IsValid(size) {
+		writeError(w, http.StatusBadRequest, "invalid size (small|medium|large)")
+		return 0, "", "", false
+	}
+	if storage == "" {
+		storage = "1Gi"
+	}
+	if instances < 1 {
+		instances = 1
+	}
+	if engine == "redis" && instances != 1 {
+		writeError(w, http.StatusBadRequest, "redis supports a single instance")
+		return 0, "", "", false
+	}
+	return instances, size, storage, true
 }
 
 func (s *Server) handleDeleteDatabase(w http.ResponseWriter, r *http.Request) {

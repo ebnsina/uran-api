@@ -256,6 +256,8 @@ func cmdDB(args []string) error {
 		return cmdDBList(args[1:])
 	case "connection":
 		return cmdDBConnection(args[1:])
+	case "scale":
+		return cmdDBScale(args[1:])
 	case "rm":
 		return cmdDBRm(args[1:])
 	default:
@@ -267,21 +269,46 @@ func cmdDBCreate(args []string) error {
 	fs := flag.NewFlagSet("db create", flag.ExitOnError)
 	project := fs.Int64("project", 0, "project id")
 	engine := fs.String("engine", "postgres", "engine: postgres|redis")
+	instances := fs.Int("instances", 1, "number of nodes (postgres HA when >1)")
+	size := fs.String("size", "small", "instance size: small|medium|large")
+	storage := fs.String("storage", "1Gi", "disk size, e.g. 5Gi")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *project == 0 || len(rest) != 1 {
-		return fmt.Errorf("usage: uran db create --project ID [--engine postgres|redis] NAME")
+		return fmt.Errorf("usage: uran db create --project ID [--engine postgres|redis] [--instances N --size S --storage G] NAME")
 	}
 	c, err := authed()
 	if err != nil {
 		return err
 	}
 	var db database
-	body := map[string]string{"name": rest[0], "engine": *engine}
+	body := map[string]any{"name": rest[0], "engine": *engine, "instances": *instances, "size": *size, "storage": *storage}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), body, &db); err != nil {
 		return err
 	}
-	fmt.Printf("creating %s database %d (%s) — check: uran db connection --database %d\n", *engine, db.ID, db.Status, db.ID)
+	fmt.Printf("creating %s database %d (%dx %s) — check: uran db connection --database %d\n", *engine, db.ID, *instances, db.Status, db.ID)
+	return nil
+}
+
+func cmdDBScale(args []string) error {
+	fs := flag.NewFlagSet("db scale", flag.ExitOnError)
+	id := fs.Int64("database", 0, "database id")
+	instances := fs.Int("instances", 0, "number of nodes (0 keeps current)")
+	size := fs.String("size", "", "instance size (empty keeps current)")
+	storage := fs.String("storage", "", "disk size (empty keeps current)")
+	_ = fs.Parse(args)
+	if *id == 0 {
+		return fmt.Errorf("usage: uran db scale --database ID [--instances N --size S --storage G]")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	body := map[string]any{"instances": *instances, "size": *size, "storage": *storage}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/databases/%d/scale", *id), body, nil); err != nil {
+		return err
+	}
+	fmt.Printf("scaling database %d\n", *id)
 	return nil
 }
 
@@ -322,12 +349,16 @@ func cmdDBConnection(args []string) error {
 		return err
 	}
 	var resp struct {
-		URI string `json:"uri"`
+		URI     string `json:"uri"`
+		ReadURI string `json:"read_uri"`
 	}
 	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/databases/%d/connection", *id), nil, &resp); err != nil {
 		return err
 	}
 	fmt.Println(resp.URI)
+	if resp.ReadURI != "" {
+		fmt.Println("read:", resp.ReadURI)
+	}
 	return nil
 }
 
