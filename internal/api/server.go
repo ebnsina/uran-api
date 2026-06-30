@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/ebnsina/uran-api/internal/auth"
+	"github.com/ebnsina/uran-api/internal/k8s"
 	"github.com/ebnsina/uran-api/internal/store"
 )
 
@@ -19,12 +20,13 @@ type Server struct {
 	auth          *auth.Authenticator
 	log           *slog.Logger
 	webhookSecret string
+	reader        *k8s.Reader
 }
 
 // New builds a Server. webhookSecret is the HMAC secret used to verify GitHub
-// webhooks; an empty value disables verification (development only).
-func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret string) *Server {
-	return &Server{store: s, auth: a, log: log, webhookSecret: webhookSecret}
+// webhooks; reader provides read-only cluster access for logs/metrics.
+func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret string, reader *k8s.Reader) *Server {
+	return &Server{store: s, auth: a, log: log, webhookSecret: webhookSecret, reader: reader}
 }
 
 // Router returns the configured HTTP handler.
@@ -61,6 +63,8 @@ func (s *Server) Router() http.Handler {
 		r.Get("/v1/services/{serviceID}/deploys", s.handleListDeploys)
 		r.Post("/v1/services/{serviceID}/deploys", s.handleCreateDeploy)
 		r.Post("/v1/services/{serviceID}/image-deploys", s.handleImageDeploy)
+		r.Get("/v1/services/{serviceID}/runtime-logs", s.handleRuntimeLogs)
+		r.Get("/v1/services/{serviceID}/metrics", s.handleMetrics)
 		r.Get("/v1/deploys/{deployID}", s.handleGetDeploy)
 		r.Get("/v1/deploys/{deployID}/logs", s.handleDeployLogs)
 		r.Post("/v1/deploys/{deployID}/rollback", s.handleRollback)

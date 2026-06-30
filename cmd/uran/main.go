@@ -26,6 +26,7 @@ func main() {
 		"scale":    cmdScale,
 		"health":   cmdHealth,
 		"disk":     cmdDisk,
+		"metrics":  cmdMetrics,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -47,7 +48,8 @@ Usage:
   uran whoami
   uran deploy   --service ID [--commit SHA | --image REF]
   uran status   --deploy ID
-  uran logs     --deploy ID
+  uran logs     --deploy ID | --service ID
+  uran metrics  --service ID
   uran rollback --deploy ID
   uran env list    --service ID
   uran env set     --service ID [--secret] KEY=VALUE

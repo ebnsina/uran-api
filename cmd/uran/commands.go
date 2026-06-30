@@ -333,6 +333,38 @@ func cmdDomainRm(args []string) error {
 	return nil
 }
 
+type podMetric struct {
+	Pod           string `json:"pod"`
+	CPUMillicores int64  `json:"cpu_millicores"`
+	MemoryBytes   int64  `json:"memory_bytes"`
+}
+
+// cmdMetrics prints current CPU/memory usage per pod for a service.
+func cmdMetrics(args []string) error {
+	fs := flag.NewFlagSet("metrics", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran metrics --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var metrics []podMetric
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/services/%d/metrics", *service), nil, &metrics); err != nil {
+		return err
+	}
+	if len(metrics) == 0 {
+		fmt.Println("(no metrics yet)")
+		return nil
+	}
+	for _, m := range metrics {
+		fmt.Printf("%-40s %5dm CPU  %6dMi\n", m.Pod, m.CPUMillicores, m.MemoryBytes/(1024*1024))
+	}
+	return nil
+}
+
 // cmdScale updates a service's replicas, instance size, and autoscaling bounds.
 func cmdScale(args []string) error {
 	fs := flag.NewFlagSet("scale", flag.ExitOnError)

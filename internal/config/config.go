@@ -21,6 +21,7 @@ type APIConfig struct {
 	ShutdownTimeout     time.Duration // URAN_SHUTDOWN_TIMEOUT
 	Env                 string        // URAN_ENV
 	GitHubWebhookSecret string        // URAN_GITHUB_WEBHOOK_SECRET
+	Kubeconfig          string        // URAN_KUBECONFIG — for runtime logs/metrics
 }
 
 // BuilderConfig is the configuration for the build worker.
@@ -50,6 +51,7 @@ func LoadAPI() (APIConfig, error) {
 		ShutdownTimeout:     l.dur("URAN_SHUTDOWN_TIMEOUT"),
 		Env:                 l.str("URAN_ENV"),
 		GitHubWebhookSecret: l.str("URAN_GITHUB_WEBHOOK_SECRET"),
+		Kubeconfig:          l.str("URAN_KUBECONFIG"),
 	}
 	return cfg, l.err()
 }

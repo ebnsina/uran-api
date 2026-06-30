@@ -29,6 +29,7 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   on CPU (HPA), with readiness/liveness health checks gating rollouts.
 - **Persistent disks** — attach a volume to a service for stateful workloads;
   data survives restarts and redeploys.
+- **Observability** — stream live runtime logs and read per-pod CPU/memory.
 - **Instant rollback** — redeploy any previous image without rebuilding.
 - **CLI** — drive the whole flow from the terminal with `uran`.
 
@@ -83,6 +84,8 @@ uran db connection --database 1
 uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4
 uran health --service 3 --path /healthz
 uran disk attach --service 3 --size 1Gi --path /data
+uran logs    --service 3                  # live runtime logs
+uran metrics --service 3                  # per-pod CPU/memory
 ```
 
 ## API
@@ -101,6 +104,8 @@ uran disk attach --service 3 --size 1Gi --path /data
 | POST | `/v1/services/{serviceID}/image-deploys` | bearer | Deploy a prebuilt image |
 | GET  | `/v1/deploys/{deployID}` | bearer | Get a deploy |
 | GET  | `/v1/deploys/{deployID}/logs` | bearer | Stream build logs (SSE) |
+| GET  | `/v1/services/{serviceID}/runtime-logs` | bearer | Stream live runtime logs |
+| GET  | `/v1/services/{serviceID}/metrics` | bearer | Per-pod CPU/memory usage |
 | POST | `/v1/deploys/{deployID}/rollback` | bearer | Redeploy a prior image |
 | GET/POST | `/v1/services/{serviceID}/env` | bearer | List / upsert env vars |
 | DELETE | `/v1/services/{serviceID}/env/{key}` | bearer | Remove an env var |
