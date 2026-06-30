@@ -29,6 +29,12 @@ func (s *Store) SetServiceDisk(ctx context.Context, id int64, size, path string)
 	return err
 }
 
+// SetServiceSuspended suspends (scale to zero) or resumes a service.
+func (s *Store) SetServiceSuspended(ctx context.Context, id int64, suspended bool) error {
+	_, err := s.pool.Exec(ctx, `UPDATE services SET suspended = $2 WHERE id = $1`, id, suspended)
+	return err
+}
+
 // LatestImagedDeploy returns the newest deploy for a service that has a built
 // image (so settings changes can be re-applied without a rebuild). Returns
 // ErrNotFound if the service has never produced an image.

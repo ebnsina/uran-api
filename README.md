@@ -29,6 +29,7 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   mark a var build-time to also pass it as a build arg.
 - **Scaling & autoscaling** — set replica count and instance size, or autoscale
   on CPU (HPA), with readiness/liveness health checks gating rollouts.
+- **Suspend / resume** — scale a service to zero to save resources, and back.
 - **Persistent disks** — attach a volume to a service for stateful workloads;
   data survives restarts and redeploys.
 - **Team roles (RBAC)** — owner / admin / member / viewer, with viewer
@@ -134,6 +135,8 @@ uran metrics --service 3                  # per-pod CPU/memory
 | GET | `/v1/databases/{databaseID}/connection` | bearer | Connection URI (when ready) |
 | POST | `/v1/services/{serviceID}/scale` | bearer | Replicas, instance size, autoscaling |
 | POST | `/v1/services/{serviceID}/health` | bearer | Set health-check path |
+| POST | `/v1/services/{serviceID}/suspend` | bearer | Scale to zero |
+| POST | `/v1/services/{serviceID}/resume` | bearer | Restore from suspend |
 | POST/DELETE | `/v1/services/{serviceID}/disk` | bearer | Attach / detach a persistent disk |
 | POST | `/v1/webhooks/github` | HMAC | GitHub push / pull_request events |
 

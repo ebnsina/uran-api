@@ -131,6 +131,7 @@ func (p *Processor) reconcile(ctx context.Context, deployID int64) {
 		DiskSize:     svc.DiskSize,
 		DiskPath:     svc.DiskPath,
 		PullCreds:    p.pullCreds(ctx, orgID),
+		Suspended:    svc.Suspended,
 	}
 	if err := p.recon.Apply(ctx, spec); err != nil {
 		log.Error("reconcile failed", "err", err)

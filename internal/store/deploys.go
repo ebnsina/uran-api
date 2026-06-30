@@ -210,12 +210,12 @@ func (s *Store) ServiceByID(ctx context.Context, id int64) (Service, int64, erro
 	var orgID int64
 	err := s.pool.QueryRow(ctx,
 		`SELECT s.id, s.project_id, s.name, s.slug, s.type, s.repo_url, s.branch, s.schedule,
-		        s.replicas, s.instance_size, s.health_path, s.min_replicas, s.max_replicas, s.disk_size, s.disk_path, s.created_at, p.org_id
+		        s.replicas, s.instance_size, s.health_path, s.min_replicas, s.max_replicas, s.disk_size, s.disk_path, s.suspended, s.created_at, p.org_id
 		 FROM services s JOIN projects p ON p.id = s.project_id
 		 WHERE s.id = $1`,
 		id,
 	).Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.Schedule,
-		&svc.Replicas, &svc.InstanceSize, &svc.HealthPath, &svc.MinReplicas, &svc.MaxReplicas, &svc.DiskSize, &svc.DiskPath, &svc.CreatedAt, &orgID)
+		&svc.Replicas, &svc.InstanceSize, &svc.HealthPath, &svc.MinReplicas, &svc.MaxReplicas, &svc.DiskSize, &svc.DiskPath, &svc.Suspended, &svc.CreatedAt, &orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return svc, 0, ErrNotFound
 	}

@@ -31,6 +31,8 @@ func main() {
 		"member":   cmdMember,
 		"audit":    cmdAudit,
 		"registry": cmdRegistry,
+		"suspend":  cmdSuspend,
+		"resume":   cmdResume,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -77,7 +79,9 @@ Usage:
   uran db connection --database ID
   uran db rm         --database ID
   uran scale  --service ID [--replicas N] [--size small|medium|large] [--min N --max N]
-  uran health --service ID --path /healthz
+  uran health  --service ID --path /healthz
+  uran suspend --service ID
+  uran resume  --service ID
   uran disk attach --service ID --size 1Gi --path /data
   uran disk detach --service ID
 `)
