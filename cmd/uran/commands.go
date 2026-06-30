@@ -266,20 +266,22 @@ func cmdDB(args []string) error {
 func cmdDBCreate(args []string) error {
 	fs := flag.NewFlagSet("db create", flag.ExitOnError)
 	project := fs.Int64("project", 0, "project id")
+	engine := fs.String("engine", "postgres", "engine: postgres|redis")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *project == 0 || len(rest) != 1 {
-		return fmt.Errorf("usage: uran db create --project ID NAME")
+		return fmt.Errorf("usage: uran db create --project ID [--engine postgres|redis] NAME")
 	}
 	c, err := authed()
 	if err != nil {
 		return err
 	}
 	var db database
-	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), map[string]string{"name": rest[0]}, &db); err != nil {
+	body := map[string]string{"name": rest[0], "engine": *engine}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), body, &db); err != nil {
 		return err
 	}
-	fmt.Printf("creating database %d (%s) — check: uran db connection --database %d\n", db.ID, db.Status, db.ID)
+	fmt.Printf("creating %s database %d (%s) — check: uran db connection --database %d\n", *engine, db.ID, db.Status, db.ID)
 	return nil
 }
 

@@ -30,8 +30,8 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	if engine == "" {
 		engine = "postgres"
 	}
-	if engine != "postgres" {
-		writeError(w, http.StatusBadRequest, "unsupported engine (only postgres)")
+	if engine != "postgres" && engine != "redis" {
+		writeError(w, http.StatusBadRequest, "unsupported engine (postgres|redis)")
 		return
 	}
 	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine)
@@ -105,7 +105,7 @@ func (s *Server) handleDeleteDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Tell the controller to deprovision before removing the record.
-	payload := naming.NamespaceForOrg(orgID) + ":" + naming.DatabaseCluster(db.Slug)
+	payload := naming.NamespaceForOrg(orgID) + ":" + naming.DatabaseCluster(db.Slug) + ":" + db.Engine
 	if err := s.store.Notify(r.Context(), store.DatabaseTeardownChannel, payload); err != nil {
 		s.log.Warn("notify database teardown failed", "database_id", db.ID, "err", err)
 	}
