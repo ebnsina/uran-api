@@ -86,12 +86,24 @@ func (p *Processor) reconcile(ctx context.Context, deployID int64) {
 		return
 	}
 
+	// Custom domains only apply to production deploys, not per-PR previews.
+	var domains []string
+	if d.Kind == deploy.KindProduction {
+		domains, err = p.domainNames(ctx, d.ServiceID)
+		if err != nil {
+			log.Error("load custom domains", "err", err)
+			p.fail(ctx, log, deployID)
+			return
+		}
+	}
+
 	spec := k8s.ServiceSpec{
 		Namespace: naming.NamespaceForOrg(orgID),
 		Name:      naming.WorkloadName(svc.Slug, d.Kind, d.PRNumber),
 		Image:     d.Image,
 		Port:      servicePort,
 		Env:       envMap(envVars),
+		Domains:   domains,
 	}
 	if err := p.recon.Apply(ctx, spec); err != nil {
 		log.Error("reconcile failed", "err", err)
@@ -150,6 +162,19 @@ func parseTeardown(payload string) (serviceID int64, prNumber int, err error) {
 		return 0, 0, err
 	}
 	return serviceID, prNumber, nil
+}
+
+// domainNames returns the custom domain hostnames attached to a service.
+func (p *Processor) domainNames(ctx context.Context, serviceID int64) ([]string, error) {
+	domains, err := p.store.ListCustomDomains(ctx, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(domains))
+	for i, d := range domains {
+		out[i] = d.Domain
+	}
+	return out, nil
 }
 
 // envMap flattens stored env vars into a key/value map for the reconciler.

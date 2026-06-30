@@ -127,6 +127,91 @@ func cmdRollback(args []string) error {
 	return nil
 }
 
+type domain struct {
+	ID     int64  `json:"id"`
+	Domain string `json:"domain"`
+}
+
+// cmdDomain dispatches domain subcommands: list, add, rm.
+func cmdDomain(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: uran domain <list|add|rm> --service ID ...")
+	}
+	switch args[0] {
+	case "list":
+		return cmdDomainList(args[1:])
+	case "add":
+		return cmdDomainAdd(args[1:])
+	case "rm":
+		return cmdDomainRm(args[1:])
+	default:
+		return fmt.Errorf("unknown domain subcommand %q", args[0])
+	}
+}
+
+func cmdDomainList(args []string) error {
+	fs := flag.NewFlagSet("domain list", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran domain list --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var domains []domain
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/services/%d/domains", *service), nil, &domains); err != nil {
+		return err
+	}
+	if len(domains) == 0 {
+		fmt.Println("(no custom domains)")
+		return nil
+	}
+	for _, d := range domains {
+		fmt.Println(d.Domain)
+	}
+	return nil
+}
+
+func cmdDomainAdd(args []string) error {
+	fs := flag.NewFlagSet("domain add", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	rest := fs.Args()
+	if *service == 0 || len(rest) != 1 {
+		return fmt.Errorf("usage: uran domain add --service ID DOMAIN")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/domains", *service), map[string]string{"domain": rest[0]}, nil); err != nil {
+		return err
+	}
+	fmt.Printf("added %s (apply with a deploy or rollback)\n", rest[0])
+	return nil
+}
+
+func cmdDomainRm(args []string) error {
+	fs := flag.NewFlagSet("domain rm", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	rest := fs.Args()
+	if *service == 0 || len(rest) != 1 {
+		return fmt.Errorf("usage: uran domain rm --service ID DOMAIN")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodDelete, fmt.Sprintf("/v1/services/%d/domains/%s", *service, rest[0]), nil, nil); err != nil {
+		return err
+	}
+	fmt.Printf("removed %s\n", rest[0])
+	return nil
+}
+
 // cmdEnv dispatches env subcommands: list, set, rm.
 func cmdEnv(args []string) error {
 	if len(args) == 0 {

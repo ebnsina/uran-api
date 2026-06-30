@@ -14,6 +14,34 @@ func TestHost(t *testing.T) {
 	}
 }
 
+func TestHostsAndMatch(t *testing.T) {
+	r := &Reconciler{baseDomain: "uran.local"}
+	spec := ServiceSpec{Name: "web", Domains: []string{"example.com", "www.example.com"}}
+
+	hosts := r.hosts(spec)
+	want := []string{"web.uran.local", "example.com", "www.example.com"}
+	if len(hosts) != len(want) {
+		t.Fatalf("hosts() = %v", hosts)
+	}
+	for i := range want {
+		if hosts[i] != want[i] {
+			t.Errorf("hosts()[%d] = %q, want %q", i, hosts[i], want[i])
+		}
+	}
+
+	got := hostMatch(hosts)
+	expect := "Host(`web.uran.local`) || Host(`example.com`) || Host(`www.example.com`)"
+	if got != expect {
+		t.Errorf("hostMatch() = %q", got)
+	}
+}
+
+func TestTLSSecretName(t *testing.T) {
+	if got := tlsSecretName("web"); got != "web-tls" {
+		t.Errorf("tlsSecretName = %q", got)
+	}
+}
+
 func TestRolloutComplete(t *testing.T) {
 	replicas := int32(1)
 	ready := &appsv1.Deployment{}

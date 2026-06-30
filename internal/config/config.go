@@ -37,6 +37,7 @@ type ControllerConfig struct {
 	Env         string // URAN_ENV
 	Kubeconfig  string // URAN_KUBECONFIG
 	BaseDomain  string // URAN_BASE_DOMAIN
+	CertIssuer  string // URAN_CERT_ISSUER — cert-manager ClusterIssuer name
 }
 
 // LoadAPI loads and validates the API server configuration.
@@ -73,6 +74,7 @@ func LoadController() (ControllerConfig, error) {
 		Env:         l.str("URAN_ENV"),
 		Kubeconfig:  l.str("URAN_KUBECONFIG"),
 		BaseDomain:  l.str("URAN_BASE_DOMAIN"),
+		CertIssuer:  l.str("URAN_CERT_ISSUER"),
 	}
 	return cfg, l.err()
 }

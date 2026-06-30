@@ -21,6 +21,7 @@ func main() {
 		"logs":     cmdLogs,
 		"rollback": cmdRollback,
 		"env":      cmdEnv,
+		"domain":   cmdDomain,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -44,8 +45,11 @@ Usage:
   uran status   --deploy ID
   uran logs     --deploy ID
   uran rollback --deploy ID
-  uran env list --service ID
-  uran env set  --service ID [--secret] KEY=VALUE
-  uran env rm   --service ID KEY
+  uran env list    --service ID
+  uran env set     --service ID [--secret] KEY=VALUE
+  uran env rm      --service ID KEY
+  uran domain list --service ID
+  uran domain add  --service ID DOMAIN
+  uran domain rm   --service ID DOMAIN
 `)
 }
