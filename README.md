@@ -27,6 +27,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 - **Env vars & secrets** — injected into workloads via per-service Secrets.
 - **Scaling & autoscaling** — set replica count and instance size, or autoscale
   on CPU (HPA), with readiness/liveness health checks gating rollouts.
+- **Persistent disks** — attach a volume to a service for stateful workloads;
+  data survives restarts and redeploys.
 - **Instant rollback** — redeploy any previous image without rebuilding.
 - **CLI** — drive the whole flow from the terminal with `uran`.
 
@@ -80,6 +82,7 @@ uran db create     --project 1 maindb
 uran db connection --database 1
 uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4
 uran health --service 3 --path /healthz
+uran disk attach --service 3 --size 1Gi --path /data
 ```
 
 ## API
@@ -108,6 +111,7 @@ uran health --service 3 --path /healthz
 | GET | `/v1/databases/{databaseID}/connection` | bearer | Connection URI (when ready) |
 | POST | `/v1/services/{serviceID}/scale` | bearer | Replicas, instance size, autoscaling |
 | POST | `/v1/services/{serviceID}/health` | bearer | Set health-check path |
+| POST/DELETE | `/v1/services/{serviceID}/disk` | bearer | Attach / detach a persistent disk |
 | POST | `/v1/webhooks/github` | HMAC | GitHub push / pull_request events |
 
 Authenticated requests send `Authorization: Bearer <token>`. The webhook is

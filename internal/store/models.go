@@ -39,6 +39,8 @@ type Service struct {
 	HealthPath   string    `json:"health_path,omitempty"`
 	MinReplicas  int32     `json:"min_replicas"`
 	MaxReplicas  int32     `json:"max_replicas"`
+	DiskSize     string    `json:"disk_size,omitempty"`
+	DiskPath     string    `json:"disk_path,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 

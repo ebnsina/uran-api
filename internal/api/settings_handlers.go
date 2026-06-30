@@ -77,6 +77,46 @@ func (s *Server) handleSetHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type diskReq struct {
+	Size string `json:"size"`
+	Path string `json:"path"`
+}
+
+// handleAttachDisk attaches a persistent disk to a service. A disk pins the
+// service to a single replica.
+func (s *Server) handleAttachDisk(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.requireServiceAccess(w, r)
+	if !ok {
+		return
+	}
+	var req diskReq
+	if err := readJSON(r, &req); err != nil || req.Size == "" || req.Path == "" {
+		writeError(w, http.StatusBadRequest, "size and path required")
+		return
+	}
+	if err := s.store.SetServiceDisk(r.Context(), svc.ID, req.Size, req.Path); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not attach disk")
+		return
+	}
+	s.applyServiceChange(r.Context(), svc.ID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleDetachDisk removes a service's disk record. The underlying volume is
+// deleted on the next reconcile/teardown.
+func (s *Server) handleDetachDisk(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.requireServiceAccess(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.SetServiceDisk(r.Context(), svc.ID, "", ""); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not detach disk")
+		return
+	}
+	s.applyServiceChange(r.Context(), svc.ID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // applyServiceChange re-applies the current settings without a rebuild by
 // re-deploying the service's latest built image. If the service has never been
 // deployed, the change takes effect on the next deploy.

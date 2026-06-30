@@ -23,6 +23,12 @@ func (s *Store) SetServiceHealth(ctx context.Context, id int64, path string) err
 	return err
 }
 
+// SetServiceDisk attaches (or, with empty size, detaches) a persistent disk.
+func (s *Store) SetServiceDisk(ctx context.Context, id int64, size, path string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE services SET disk_size = $2, disk_path = $3 WHERE id = $1`, id, size, path)
+	return err
+}
+
 // LatestImagedDeploy returns the newest deploy for a service that has a built
 // image (so settings changes can be re-applied without a rebuild). Returns
 // ErrNotFound if the service has never produced an image.
