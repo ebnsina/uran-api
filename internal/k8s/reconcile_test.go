@@ -42,6 +42,28 @@ func TestTLSSecretName(t *testing.T) {
 	}
 }
 
+func TestSpecModes(t *testing.T) {
+	// A disk pins to one replica and disables autoscaling.
+	withDisk := ServiceSpec{MaxReplicas: 4, DiskSize: "1Gi", DiskPath: "/data"}
+	if !withDisk.hasDisk() {
+		t.Error("hasDisk should be true")
+	}
+	if withDisk.autoscaled() {
+		t.Error("autoscaling must be disabled when a disk is attached")
+	}
+
+	// Without a disk, max>0 enables autoscaling.
+	autoscaling := ServiceSpec{MaxReplicas: 4}
+	if autoscaling.hasDisk() || !autoscaling.autoscaled() {
+		t.Error("expected autoscaling, no disk")
+	}
+
+	// Incomplete disk config (size without path) is not a disk.
+	if (ServiceSpec{DiskSize: "1Gi"}).hasDisk() {
+		t.Error("size without path is not a disk")
+	}
+}
+
 func TestRolloutComplete(t *testing.T) {
 	replicas := int32(1)
 	ready := &appsv1.Deployment{}

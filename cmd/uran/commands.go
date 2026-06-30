@@ -381,6 +381,59 @@ func cmdHealth(args []string) error {
 	return nil
 }
 
+// cmdDisk dispatches disk subcommands: attach, detach.
+func cmdDisk(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: uran disk <attach|detach> --service ID ...")
+	}
+	switch args[0] {
+	case "attach":
+		return cmdDiskAttach(args[1:])
+	case "detach":
+		return cmdDiskDetach(args[1:])
+	default:
+		return fmt.Errorf("unknown disk subcommand %q", args[0])
+	}
+}
+
+func cmdDiskAttach(args []string) error {
+	fs := flag.NewFlagSet("disk attach", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	size := fs.String("size", "", "disk size, e.g. 1Gi")
+	path := fs.String("path", "", "mount path, e.g. /data")
+	_ = fs.Parse(args)
+	if *service == 0 || *size == "" || *path == "" {
+		return fmt.Errorf("usage: uran disk attach --service ID --size 1Gi --path /data")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/disk", *service), map[string]string{"size": *size, "path": *path}, nil); err != nil {
+		return err
+	}
+	fmt.Printf("attached %s disk at %s (single replica); applying\n", *size, *path)
+	return nil
+}
+
+func cmdDiskDetach(args []string) error {
+	fs := flag.NewFlagSet("disk detach", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran disk detach --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodDelete, fmt.Sprintf("/v1/services/%d/disk", *service), nil, nil); err != nil {
+		return err
+	}
+	fmt.Println("disk detached; applying")
+	return nil
+}
+
 // cmdEnv dispatches env subcommands: list, set, rm.
 func cmdEnv(args []string) error {
 	if len(args) == 0 {

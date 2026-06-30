@@ -34,10 +34,16 @@ type ServiceSpec struct {
 	HealthPath   string            // HTTP health-check path; empty means a TCP check
 	MinReplicas  int32             // autoscale floor (autoscaling on when MaxReplicas > 0)
 	MaxReplicas  int32             // autoscale ceiling
+	DiskSize     string            // persistent disk size (e.g. "1Gi"); empty means none
+	DiskPath     string            // mount path for the disk
 }
 
-// autoscaled reports whether the spec uses an HPA rather than a fixed count.
-func (s ServiceSpec) autoscaled() bool { return s.MaxReplicas > 0 }
+// hasDisk reports whether a persistent disk is attached.
+func (s ServiceSpec) hasDisk() bool { return s.DiskSize != "" && s.DiskPath != "" }
+
+// autoscaled reports whether the spec uses an HPA. A disk pins the service to a
+// single replica, so autoscaling is disabled while a disk is attached.
+func (s ServiceSpec) autoscaled() bool { return s.MaxReplicas > 0 && !s.hasDisk() }
 
 // envSecretName is the Secret that holds a service's environment variables.
 func envSecretName(name string) string { return name + "-env" }
@@ -89,7 +95,10 @@ func (r *Reconciler) Apply(ctx context.Context, spec ServiceSpec) error {
 		return r.applyCronJob(ctx, spec)
 	}
 
-	// All other types run a Deployment, optionally autoscaled.
+	// All other types run a Deployment, optionally autoscaled and with a disk.
+	if err := r.reconcileDisk(ctx, spec); err != nil {
+		return err
+	}
 	if err := r.applyDeployment(ctx, spec); err != nil {
 		return err
 	}
@@ -155,15 +164,35 @@ func (r *Reconciler) applyDeployment(ctx context.Context, spec ServiceSpec) erro
 		probe := healthProbe(spec)
 		container = container.WithReadinessProbe(probe).WithLivenessProbe(probe)
 	}
+	// Mount must be added to the container before WithContainers, which stores a
+	// copy of the container value.
+	if spec.hasDisk() {
+		container = container.WithVolumeMounts(coreac.VolumeMount().WithName(diskVolumeName).WithMountPath(spec.DiskPath))
+	}
+
+	podSpec := coreac.PodSpec().WithContainers(container)
+	if spec.hasDisk() {
+		podSpec = podSpec.WithVolumes(coreac.Volume().WithName(diskVolumeName).
+			WithPersistentVolumeClaim(coreac.PersistentVolumeClaimVolumeSource().WithClaimName(pvcName(spec.Name))))
+	}
 
 	depSpec := appsac.DeploymentSpec().
 		WithSelector(metaac.LabelSelector().WithMatchLabels(labels)).
-		WithTemplate(coreac.PodTemplateSpec().
-			WithLabels(labels).
-			WithSpec(coreac.PodSpec().WithContainers(container)),
-		)
-	// When autoscaling, the HPA owns the replica count — don't fight it.
-	if !spec.autoscaled() {
+		WithTemplate(coreac.PodTemplateSpec().WithLabels(labels).WithSpec(podSpec))
+
+	switch {
+	case spec.hasDisk():
+		// A ReadWriteOnce disk can't be shared across pods: pin to one replica
+		// and roll with maxSurge=0 so the old pod releases the volume before the
+		// new one starts.
+		depSpec = depSpec.WithReplicas(1).
+			WithStrategy(appsac.DeploymentStrategy().
+				WithType(appsv1.RollingUpdateDeploymentStrategyType).
+				WithRollingUpdate(appsac.RollingUpdateDeployment().
+					WithMaxSurge(intstr.FromInt32(0)).
+					WithMaxUnavailable(intstr.FromInt32(1))))
+	case !spec.autoscaled():
+		// When autoscaling, the HPA owns the replica count — don't fight it.
 		depSpec = depSpec.WithReplicas(spec.Replicas)
 	}
 
@@ -314,6 +343,9 @@ func (r *Reconciler) Delete(ctx context.Context, namespace, name string) error {
 		return fmt.Errorf("delete cronjob %s: %w", name, err)
 	}
 	if err := r.deleteAutoscaler(ctx, namespace, name); err != nil {
+		return err
+	}
+	if err := r.deletePVC(ctx, namespace, pvcName(name)); err != nil {
 		return err
 	}
 	if err := r.kube.CoreV1().Services(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
