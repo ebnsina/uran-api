@@ -71,6 +71,12 @@ func (s *Server) Router() http.Handler {
 		r.Get("/v1/services/{serviceID}/domains", s.handleListDomains)
 		r.Post("/v1/services/{serviceID}/domains", s.handleAddDomain)
 		r.Delete("/v1/services/{serviceID}/domains/{domain}", s.handleDeleteDomain)
+
+		r.Get("/v1/projects/{projectID}/databases", s.handleListDatabases)
+		r.Post("/v1/projects/{projectID}/databases", s.handleCreateDatabase)
+		r.Get("/v1/databases/{databaseID}", s.handleGetDatabase)
+		r.Get("/v1/databases/{databaseID}/connection", s.handleDatabaseConnection)
+		r.Delete("/v1/databases/{databaseID}", s.handleDeleteDatabase)
 	})
 
 	return r

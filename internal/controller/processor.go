@@ -56,6 +56,23 @@ func (p *Processor) Run(ctx context.Context) error {
 			go p.teardown(ctx, payload)
 		})
 	})
+	g.Go(func() error {
+		p.log.Info("controller listening for databases", "channel", store.DatabaseChannel)
+		return p.store.Listen(ctx, store.DatabaseChannel, func(payload string) {
+			id, err := strconv.ParseInt(payload, 10, 64)
+			if err != nil {
+				p.log.Warn("bad database notification", "payload", payload)
+				return
+			}
+			go p.reconcileDatabase(ctx, id)
+		})
+	})
+	g.Go(func() error {
+		p.log.Info("controller listening for database teardowns", "channel", store.DatabaseTeardownChannel)
+		return p.store.Listen(ctx, store.DatabaseTeardownChannel, func(payload string) {
+			go p.teardownDatabase(ctx, payload)
+		})
+	})
 	return g.Wait()
 }
 
@@ -141,6 +158,62 @@ func (p *Processor) teardown(ctx context.Context, payload string) {
 		return
 	}
 	log.Info("preview torn down", "name", name)
+}
+
+// reconcileDatabase provisions a managed Postgres cluster, waits for it to be
+// ready, and records the connection URI.
+func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
+	log := p.log.With("database_id", dbID)
+
+	db, orgID, err := p.store.DatabaseByID(ctx, dbID)
+	if err != nil {
+		log.Error("load database", "err", err)
+		return
+	}
+	namespace := naming.NamespaceForOrg(orgID)
+	cluster := naming.DatabaseCluster(db.Slug)
+
+	if err := p.recon.ProvisionPostgres(ctx, namespace, cluster); err != nil {
+		log.Error("provision postgres", "err", err)
+		p.failDatabase(ctx, log, dbID)
+		return
+	}
+	if err := p.recon.WaitPostgresReady(ctx, namespace, cluster); err != nil {
+		log.Error("wait postgres ready", "err", err)
+		p.failDatabase(ctx, log, dbID)
+		return
+	}
+	uri, err := p.recon.PostgresConnectionURI(ctx, namespace, cluster)
+	if err != nil {
+		log.Error("read connection uri", "err", err)
+		p.failDatabase(ctx, log, dbID)
+		return
+	}
+	if err := p.store.SetDatabaseConnection(ctx, dbID, uri); err != nil {
+		log.Error("store connection uri", "err", err)
+		return
+	}
+	log.Info("database ready", "cluster", cluster)
+}
+
+// teardownDatabase deletes a managed cluster. Payload is "<namespace>:<cluster>".
+func (p *Processor) teardownDatabase(ctx context.Context, payload string) {
+	namespace, cluster, ok := strings.Cut(payload, ":")
+	if !ok {
+		p.log.Warn("bad database teardown notification", "payload", payload)
+		return
+	}
+	if err := p.recon.DeletePostgres(ctx, namespace, cluster); err != nil {
+		p.log.Error("delete postgres", "cluster", cluster, "err", err)
+		return
+	}
+	p.log.Info("database torn down", "cluster", cluster)
+}
+
+func (p *Processor) failDatabase(ctx context.Context, log *slog.Logger, dbID int64) {
+	if err := p.store.SetDatabaseStatus(ctx, dbID, store.DBStatusFailed); err != nil {
+		log.Error("mark database failed", "err", err)
+	}
 }
 
 func (p *Processor) fail(ctx context.Context, log *slog.Logger, deployID int64) {

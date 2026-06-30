@@ -22,3 +22,9 @@ func WorkloadName(slug, kind string, prNumber *int) string {
 	}
 	return slug
 }
+
+// DatabaseCluster returns the managed-database cluster name for a db slug. The
+// "db-" prefix keeps it from colliding with service workloads in the namespace.
+func DatabaseCluster(slug string) string {
+	return "db-" + slug
+}
