@@ -44,7 +44,7 @@ func usage() {
 Usage:
   uran login    --api URL --email EMAIL --password PASSWORD
   uran whoami
-  uran deploy   --service ID [--commit SHA]
+  uran deploy   --service ID [--commit SHA | --image REF]
   uran status   --deploy ID
   uran logs     --deploy ID
   uran rollback --deploy ID

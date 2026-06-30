@@ -64,20 +64,30 @@ func cmdWhoami(args []string) error {
 	return nil
 }
 
-// cmdDeploy triggers a build+deploy for a service.
+// cmdDeploy triggers a deploy for a service: a Git build by default, or a
+// prebuilt image when --image is given.
 func cmdDeploy(args []string) error {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
 	service := fs.Int64("service", 0, "service id")
-	commit := fs.String("commit", "", "optional commit sha")
+	commit := fs.String("commit", "", "optional commit sha (Git build)")
+	image := fs.String("image", "", "deploy a prebuilt image instead of building")
 	_ = fs.Parse(args)
 	if *service == 0 {
-		return fmt.Errorf("usage: uran deploy --service ID [--commit SHA]")
+		return fmt.Errorf("usage: uran deploy --service ID [--commit SHA | --image REF]")
 	}
 	c, err := authed()
 	if err != nil {
 		return err
 	}
 	var d deployView
+	if *image != "" {
+		body := map[string]string{"image": *image}
+		if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/image-deploys", *service), body, &d); err != nil {
+			return err
+		}
+		fmt.Printf("deploying image %s as deploy %d\n", *image, d.ID)
+		return nil
+	}
 	body := map[string]string{"commit_sha": *commit}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/deploys", *service), body, &d); err != nil {
 		return err

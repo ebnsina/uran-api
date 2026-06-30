@@ -8,6 +8,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 ## Features
 
 - **Git-driven deploys** — connect a repo; pushes build and ship automatically.
+- **Deploy from an image** — ship a prebuilt container image directly (CI push),
+  skipping the build.
 - **Multiple service types** — HTTP web services, static sites, background
   workers (no inbound routing), and scheduled cron jobs.
 - **Managed databases** — provision a Postgres instance per project
@@ -66,6 +68,7 @@ go build -o uran ./cmd/uran
 
 uran login    --api http://localhost:8080 --email you@example.com --password ****
 uran deploy   --service 3                 # build + deploy from the service's repo
+uran deploy   --service 3 --image registry/app:1.2.3   # deploy a prebuilt image
 uran logs     --deploy 6                  # stream build logs
 uran status   --deploy 6
 uran env set  --service 3 --secret API_KEY=xyz
@@ -91,7 +94,8 @@ uran health --service 3 --path /healthz
 | GET/POST | `/v1/orgs` | bearer | List / create orgs |
 | GET/POST | `/v1/orgs/{orgID}/projects` | bearer | List / create projects |
 | GET/POST | `/v1/projects/{projectID}/services` | bearer | List / create services |
-| GET/POST | `/v1/services/{serviceID}/deploys` | bearer | List / trigger deploys |
+| GET/POST | `/v1/services/{serviceID}/deploys` | bearer | List / trigger Git build deploys |
+| POST | `/v1/services/{serviceID}/image-deploys` | bearer | Deploy a prebuilt image |
 | GET  | `/v1/deploys/{deployID}` | bearer | Get a deploy |
 | GET  | `/v1/deploys/{deployID}/logs` | bearer | Stream build logs (SSE) |
 | POST | `/v1/deploys/{deployID}/rollback` | bearer | Redeploy a prior image |
