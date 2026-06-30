@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,10 +24,14 @@ type ServiceSpec struct {
 	Image     string            // image reference to run
 	Port      int32             // port the container listens on (exposed as PORT env)
 	Env       map[string]string // user-defined environment variables
+	Domains   []string          // additional custom hostnames routed to this workload
 }
 
 // envSecretName is the Secret that holds a service's environment variables.
 func envSecretName(name string) string { return name + "-env" }
+
+// tlsSecretName is the Secret cert-manager writes the issued certificate into.
+func tlsSecretName(name string) string { return name + "-tls" }
 
 // rolloutTimeout bounds how long Apply waits for a Deployment to become ready.
 const rolloutTimeout = 3 * time.Minute
@@ -37,9 +42,21 @@ var ingressRouteGVR = schema.GroupVersionResource{
 	Resource: "ingressroutes",
 }
 
-// Host returns the external hostname for a service spec.
+var certificateGVR = schema.GroupVersionResource{
+	Group:    "cert-manager.io",
+	Version:  "v1",
+	Resource: "certificates",
+}
+
+// Host returns the default external hostname for a service spec.
 func (r *Reconciler) Host(spec ServiceSpec) string {
 	return fmt.Sprintf("%s.%s", spec.Name, r.baseDomain)
+}
+
+// hosts returns every hostname routed to the workload: the default host plus any
+// custom domains.
+func (r *Reconciler) hosts(spec ServiceSpec) []string {
+	return append([]string{r.Host(spec)}, spec.Domains...)
 }
 
 // Apply reconciles the namespace, Deployment, Service, and IngressRoute for a
@@ -49,6 +66,9 @@ func (r *Reconciler) Apply(ctx context.Context, spec ServiceSpec) error {
 		return err
 	}
 	if err := r.applyEnvSecret(ctx, spec); err != nil {
+		return err
+	}
+	if err := r.applyCertificate(ctx, spec); err != nil {
 		return err
 	}
 	if err := r.applyDeployment(ctx, spec); err != nil {
@@ -133,33 +153,101 @@ func (r *Reconciler) applyService(ctx context.Context, spec ServiceSpec) error {
 	return nil
 }
 
-func (r *Reconciler) applyIngressRoute(ctx context.Context, spec ServiceSpec) error {
+// applyCertificate requests a cert-manager certificate covering every host
+// routed to the workload, stored in the workload's TLS secret.
+func (r *Reconciler) applyCertificate(ctx context.Context, spec ServiceSpec) error {
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "traefik.io/v1alpha1",
-		"kind":       "IngressRoute",
+		"apiVersion": "cert-manager.io/v1",
+		"kind":       "Certificate",
 		"metadata": map[string]any{
 			"name":      spec.Name,
 			"namespace": spec.Namespace,
 		},
 		"spec": map[string]any{
-			"entryPoints": []any{"web"},
-			"routes": []any{
-				map[string]any{
-					"match": fmt.Sprintf("Host(`%s`)", r.Host(spec)),
-					"kind":  "Rule",
-					"services": []any{
-						map[string]any{"name": spec.Name, "port": int64(80)},
-					},
-				},
+			"secretName": tlsSecretName(spec.Name),
+			"dnsNames":   toAnySlice(r.hosts(spec)),
+			"issuerRef": map[string]any{
+				"name": r.certIssuer,
+				"kind": "ClusterIssuer",
 			},
 		},
 	}}
-	_, err := r.dyn.Resource(ingressRouteGVR).Namespace(spec.Namespace).
+	_, err := r.dyn.Resource(certificateGVR).Namespace(spec.Namespace).
 		Apply(ctx, spec.Name, obj, applyOpts())
 	if err != nil {
-		return fmt.Errorf("apply ingressroute %s: %w", spec.Name, err)
+		return fmt.Errorf("apply certificate %s: %w", spec.Name, err)
 	}
 	return nil
+}
+
+// httpRouteName is the plain-HTTP IngressRoute paired with the HTTPS one.
+func httpRouteName(name string) string { return name + "-http" }
+
+// applyIngressRoute applies two routes for the workload: an HTTPS route on the
+// websecure entrypoint (terminating TLS with the issued certificate) and a
+// plain HTTP route on the web entrypoint. A single IngressRoute cannot mix TLS
+// and non-TLS entrypoints, so they are separate objects.
+func (r *Reconciler) applyIngressRoute(ctx context.Context, spec ServiceSpec) error {
+	match := hostMatch(r.hosts(spec))
+
+	https := ingressRouteObject(spec.Name, spec.Namespace, spec.Name, match, []any{"websecure"}, tlsSecretName(spec.Name))
+	if _, err := r.dyn.Resource(ingressRouteGVR).Namespace(spec.Namespace).
+		Apply(ctx, spec.Name, https, applyOpts()); err != nil {
+		return fmt.Errorf("apply https ingressroute %s: %w", spec.Name, err)
+	}
+
+	http := ingressRouteObject(httpRouteName(spec.Name), spec.Namespace, spec.Name, match, []any{"web"}, "")
+	if _, err := r.dyn.Resource(ingressRouteGVR).Namespace(spec.Namespace).
+		Apply(ctx, httpRouteName(spec.Name), http, applyOpts()); err != nil {
+		return fmt.Errorf("apply http ingressroute %s: %w", spec.Name, err)
+	}
+	return nil
+}
+
+// ingressRouteObject builds an IngressRoute named name that routes match →
+// service:80 on the given entrypoints. A non-empty tlsSecret adds a TLS block.
+func ingressRouteObject(name, namespace, service, match string, entryPoints []any, tlsSecret string) *unstructured.Unstructured {
+	spec := map[string]any{
+		"entryPoints": entryPoints,
+		"routes": []any{
+			map[string]any{
+				"match": match,
+				"kind":  "Rule",
+				"services": []any{
+					map[string]any{"name": service, "port": int64(80)},
+				},
+			},
+		},
+	}
+	if tlsSecret != "" {
+		spec["tls"] = map[string]any{"secretName": tlsSecret}
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "traefik.io/v1alpha1",
+		"kind":       "IngressRoute",
+		"metadata": map[string]any{
+			"name":      name,
+			"namespace": namespace,
+		},
+		"spec": spec,
+	}}
+}
+
+// hostMatch builds a Traefik rule matching any of the given hosts.
+func hostMatch(hosts []string) string {
+	parts := make([]string, len(hosts))
+	for i, h := range hosts {
+		parts[i] = fmt.Sprintf("Host(`%s`)", h)
+	}
+	return strings.Join(parts, " || ")
+}
+
+func toAnySlice(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
 }
 
 // Delete removes the Deployment, Service, IngressRoute, and env Secret for a
@@ -178,6 +266,15 @@ func (r *Reconciler) Delete(ctx context.Context, namespace, name string) error {
 	}
 	if err := r.dyn.Resource(ingressRouteGVR).Namespace(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
 		return fmt.Errorf("delete ingressroute %s: %w", name, err)
+	}
+	if err := r.dyn.Resource(ingressRouteGVR).Namespace(namespace).Delete(ctx, httpRouteName(name), delOpts); ignoreNotFound(err) != nil {
+		return fmt.Errorf("delete http ingressroute %s: %w", name, err)
+	}
+	if err := r.dyn.Resource(certificateGVR).Namespace(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
+		return fmt.Errorf("delete certificate %s: %w", name, err)
+	}
+	if err := r.kube.CoreV1().Secrets(namespace).Delete(ctx, tlsSecretName(name), delOpts); ignoreNotFound(err) != nil {
+		return fmt.Errorf("delete tls secret %s: %w", name, err)
 	}
 	return nil
 }

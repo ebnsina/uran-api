@@ -20,11 +20,13 @@ type Reconciler struct {
 	kube       kubernetes.Interface
 	dyn        dynamic.Interface
 	baseDomain string
+	certIssuer string
 }
 
 // NewReconciler builds a Reconciler from a kubeconfig file. baseDomain is the
 // wildcard domain under which service routes are exposed (e.g. "uran.local").
-func NewReconciler(kubeconfigPath, baseDomain string) (*Reconciler, error) {
+// certIssuer is the cert-manager ClusterIssuer used to provision TLS.
+func NewReconciler(kubeconfigPath, baseDomain, certIssuer string) (*Reconciler, error) {
 	restCfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("load kubeconfig %q: %w", kubeconfigPath, err)
@@ -37,5 +39,5 @@ func NewReconciler(kubeconfigPath, baseDomain string) (*Reconciler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build dynamic client: %w", err)
 	}
-	return &Reconciler{kube: kube, dyn: dyn, baseDomain: baseDomain}, nil
+	return &Reconciler{kube: kube, dyn: dyn, baseDomain: baseDomain, certIssuer: certIssuer}, nil
 }

@@ -67,6 +67,10 @@ func (s *Server) Router() http.Handler {
 		r.Get("/v1/services/{serviceID}/env", s.handleListEnv)
 		r.Post("/v1/services/{serviceID}/env", s.handleSetEnv)
 		r.Delete("/v1/services/{serviceID}/env/{key}", s.handleDeleteEnv)
+
+		r.Get("/v1/services/{serviceID}/domains", s.handleListDomains)
+		r.Post("/v1/services/{serviceID}/domains", s.handleAddDomain)
+		r.Delete("/v1/services/{serviceID}/domains/{domain}", s.handleDeleteDomain)
 	})
 
 	return r

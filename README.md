@@ -14,6 +14,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   and Traefik route via Server-Side Apply, with rollout health checks.
 - **Preview environments** — every pull request gets an isolated environment on
   its own hostname, torn down when the PR closes.
+- **Custom domains & automatic TLS** — attach your own hostnames; certificates
+  are provisioned by cert-manager and served over HTTPS.
 - **Env vars & secrets** — injected into workloads via per-service Secrets.
 - **Instant rollback** — redeploy any previous image without rebuilding.
 - **CLI** — drive the whole flow from the terminal with `uran`.
@@ -61,6 +63,8 @@ uran status   --deploy 6
 uran env set  --service 3 --secret API_KEY=xyz
 uran env list --service 3
 uran rollback --deploy 5                  # redeploy a prior image (no rebuild)
+uran domain add  --service 3 app.example.com
+uran domain list --service 3
 ```
 
 ## API
@@ -81,6 +85,8 @@ uran rollback --deploy 5                  # redeploy a prior image (no rebuild)
 | POST | `/v1/deploys/{deployID}/rollback` | bearer | Redeploy a prior image |
 | GET/POST | `/v1/services/{serviceID}/env` | bearer | List / upsert env vars |
 | DELETE | `/v1/services/{serviceID}/env/{key}` | bearer | Remove an env var |
+| GET/POST | `/v1/services/{serviceID}/domains` | bearer | List / add custom domains |
+| DELETE | `/v1/services/{serviceID}/domains/{domain}` | bearer | Remove a custom domain |
 | POST | `/v1/webhooks/github` | HMAC | GitHub push / pull_request events |
 
 Authenticated requests send `Authorization: Bearer <token>`. The webhook is
