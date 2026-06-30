@@ -1,6 +1,6 @@
 # uran-api
 
-**Uran — push a repo, get a running app.** From `git push` to a live, routed,
+**Uran — ship code, not infrastructure.** From `git push` to a live, routed,
 TLS-secured URL in seconds. This repo is the Go control plane: the API, build
 worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 `uran-web`.
