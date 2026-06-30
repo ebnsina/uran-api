@@ -80,6 +80,7 @@ func (p *Processor) Run(ctx context.Context) error {
 		})
 	})
 	g.Go(func() error { return p.runDBAutoscaler(ctx) })
+	g.Go(func() error { return p.runUsageSampler(ctx) })
 	return g.Wait()
 }
 
@@ -195,7 +196,19 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 		p.failDatabase(ctx, log, dbID)
 		return
 	}
-	if err := p.store.SetDatabaseConnection(ctx, dbID, uri, readURI); err != nil {
+	// Optional PgBouncer pooler (Postgres only).
+	var pooledURI string
+	if db.Engine == "postgres" {
+		if err := p.recon.ReconcilePgBouncer(ctx, namespace, cluster, db.Pooling); err != nil {
+			log.Error("reconcile pooler", "err", err)
+			p.failDatabase(ctx, log, dbID)
+			return
+		}
+		if db.Pooling {
+			pooledURI = k8s.PostgresPooledURI(uri, cluster)
+		}
+	}
+	if err := p.store.SetDatabaseConnection(ctx, dbID, uri, readURI, pooledURI); err != nil {
 		log.Error("store connection uri", "err", err)
 		return
 	}
@@ -207,7 +220,7 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 func (p *Processor) provisionEngine(ctx context.Context, db store.Database, namespace, cluster string) (string, string, error) {
 	switch db.Engine {
 	case "redis":
-		if err := p.recon.ProvisionRedis(ctx, namespace, cluster); err != nil {
+		if err := p.recon.ProvisionRedis(ctx, namespace, cluster, db.Storage); err != nil {
 			return "", "", err
 		}
 		if err := p.recon.WaitRedisReady(ctx, namespace, cluster); err != nil {

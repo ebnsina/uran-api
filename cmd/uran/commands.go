@@ -195,9 +195,13 @@ func cmdDeploy(args []string) error {
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	deployID := fs.Int64("deploy", 0, "deploy id")
+	project := fs.Int64("project", 0, "project id (status of all its services)")
 	_ = fs.Parse(args)
+	if *project != 0 {
+		return cmdServiceStatus(*project)
+	}
 	if *deployID == 0 {
-		return fmt.Errorf("usage: uran status --deploy ID")
+		return fmt.Errorf("usage: uran status --deploy ID | --project ID")
 	}
 	c, err := authed()
 	if err != nil {
@@ -275,10 +279,11 @@ func cmdDBCreate(args []string) error {
 	max := fs.Int("max", 3, "autoscale: max instances")
 	size := fs.String("size", "small", "instance size: small|medium|large")
 	storage := fs.String("storage", "1Gi", "disk size, e.g. 5Gi")
+	pooling := fs.Bool("pooling", false, "enable a PgBouncer connection pooler (postgres)")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *project == 0 || len(rest) != 1 {
-		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] NAME")
+		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] [--pooling] NAME")
 	}
 	c, err := authed()
 	if err != nil {
@@ -288,7 +293,7 @@ func cmdDBCreate(args []string) error {
 	body := map[string]any{
 		"name": rest[0], "engine": *engine, "tier": *tier,
 		"instances": *instances, "min_instances": *min, "max_instances": *max,
-		"size": *size, "storage": *storage,
+		"size": *size, "storage": *storage, "pooling": *pooling,
 	}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), body, &db); err != nil {
 		return err
@@ -360,15 +365,19 @@ func cmdDBConnection(args []string) error {
 		return err
 	}
 	var resp struct {
-		URI     string `json:"uri"`
-		ReadURI string `json:"read_uri"`
+		URI       string `json:"uri"`
+		ReadURI   string `json:"read_uri"`
+		PooledURI string `json:"pooled_uri"`
 	}
 	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/databases/%d/connection", *id), nil, &resp); err != nil {
 		return err
 	}
 	fmt.Println(resp.URI)
 	if resp.ReadURI != "" {
-		fmt.Println("read:", resp.ReadURI)
+		fmt.Println("read:  ", resp.ReadURI)
+	}
+	if resp.PooledURI != "" {
+		fmt.Println("pooled:", resp.PooledURI)
 	}
 	return nil
 }
@@ -721,6 +730,85 @@ func cmdMemberRm(args []string) error {
 		return err
 	}
 	fmt.Printf("removed user %d\n", *user)
+	return nil
+}
+
+// cmdServiceStatus prints each service's latest deploy status in a project.
+func cmdServiceStatus(project int64) error {
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var statuses []struct {
+		ServiceID int64  `json:"service_id"`
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		Suspended bool   `json:"suspended"`
+		Status    string `json:"status"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/projects/%d/status", project), nil, &statuses); err != nil {
+		return err
+	}
+	for _, st := range statuses {
+		s := st.Status
+		if st.Suspended {
+			s = "suspended"
+		}
+		fmt.Printf("%-4d %-22s %-8s %s\n", st.ServiceID, st.Name, st.Type, s)
+	}
+	return nil
+}
+
+// cmdInfo prints a service's details including its internal cluster host.
+func cmdInfo(args []string) error {
+	fs := flag.NewFlagSet("info", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran info --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var d struct {
+		Name         string `json:"name"`
+		Type         string `json:"type"`
+		InternalHost string `json:"internal_host"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/services/%d", *service), nil, &d); err != nil {
+		return err
+	}
+	fmt.Printf("%s (%s)\n", d.Name, d.Type)
+	if d.InternalHost != "" {
+		fmt.Printf("internal host: %s  (reachable from other services in the project)\n", d.InternalHost)
+	}
+	return nil
+}
+
+// cmdUsage prints a service's metered usage rollup.
+func cmdUsage(args []string) error {
+	fs := flag.NewFlagSet("usage", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran usage --service ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var u struct {
+		SampleCount   int     `json:"sample_count"`
+		WindowSeconds int     `json:"window_seconds"`
+		CPUCoreSec    float64 `json:"cpu_core_seconds"`
+		AvgMemoryMB   int64   `json:"avg_memory_mb"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/services/%d/usage", *service), nil, &u); err != nil {
+		return err
+	}
+	fmt.Printf("window: %ds (%d samples)\nCPU: %.1f core-seconds\nmemory: %d MB avg\n",
+		u.WindowSeconds, u.SampleCount, u.CPUCoreSec, u.AvgMemoryMB)
 	return nil
 }
 

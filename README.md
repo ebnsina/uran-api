@@ -15,7 +15,9 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 - **Managed databases** — provision Postgres (CloudNativePG) or Redis per
   project. Two Postgres tiers: **standard** (fixed instances + size, HA with a
   load-balanced read endpoint) and **autoscale** (instances scale on CPU between
-  min/max). Apps connect via an in-namespace connection URI.
+  min/max). Optional **PgBouncer connection pooling**; Redis is persistent.
+- **Observability & metering** — runtime logs, per-pod metrics, a project status
+  page, and per-service usage sampling (CPU-seconds, memory) for billing.
 - **Flexible builds** — uses your repo's `Dockerfile` if present, otherwise
   [Nixpacks](https://nixpacks.com) auto-detects the stack; images are cached and
   pushed to a registry.
@@ -130,6 +132,8 @@ uran metrics --service 3                  # per-pod CPU/memory
 | GET  | `/v1/deploys/{deployID}/logs` | bearer | Stream build logs (SSE) |
 | GET  | `/v1/services/{serviceID}/runtime-logs` | bearer | Stream live runtime logs |
 | GET  | `/v1/services/{serviceID}/metrics` | bearer | Per-pod CPU/memory usage |
+| GET  | `/v1/services/{serviceID}/usage` | bearer | Metered usage rollup |
+| GET  | `/v1/projects/{projectID}/status` | bearer | Per-service status summary |
 | POST | `/v1/deploys/{deployID}/rollback` | bearer | Redeploy a prior image |
 | GET/POST | `/v1/services/{serviceID}/env` | bearer | List / upsert env vars |
 | DELETE | `/v1/services/{serviceID}/env/{key}` | bearer | Remove an env var |
