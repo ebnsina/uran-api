@@ -13,8 +13,9 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 - **Multiple service types** — HTTP web services, static sites, background
   workers (no inbound routing), and scheduled cron jobs.
 - **Managed databases** — provision Postgres (CloudNativePG) or Redis per
-  project, with sizing and Postgres HA (replicas + a load-balanced read
-  endpoint); apps connect via an in-namespace connection URI.
+  project. Two Postgres tiers: **standard** (fixed instances + size, HA with a
+  load-balanced read endpoint) and **autoscale** (instances scale on CPU between
+  min/max). Apps connect via an in-namespace connection URI.
 - **Flexible builds** — uses your repo's `Dockerfile` if present, otherwise
   [Nixpacks](https://nixpacks.com) auto-detects the stack; images are cached and
   pushed to a registry.
@@ -94,6 +95,7 @@ uran domain add  --service 3 app.example.com
 uran domain list --service 3
 uran db create     --project 1 maindb            # or --engine redis
 uran db create     --project 1 --instances 2 --size medium --storage 5Gi hadb
+uran db create     --project 1 --tier autoscale --min 1 --max 3 neon  # autoscaling
 uran db scale      --database 1 --instances 3 --size large
 uran db connection --database 1                  # prints rw + read URIs
 uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4

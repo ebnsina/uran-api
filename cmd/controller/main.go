@@ -43,7 +43,11 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	reader, err := k8s.NewReader(cfg.Kubeconfig)
+	if err != nil {
+		return err
+	}
 
-	proc := controller.New(st, recon, log)
+	proc := controller.New(st, recon, reader, log)
 	return proc.Run(ctx)
 }

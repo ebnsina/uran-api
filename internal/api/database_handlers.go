@@ -13,11 +13,14 @@ import (
 )
 
 type createDatabaseReq struct {
-	Name      string `json:"name"`
-	Engine    string `json:"engine"`
-	Instances int32  `json:"instances"`
-	Size      string `json:"size"`
-	Storage   string `json:"storage"`
+	Name         string `json:"name"`
+	Engine       string `json:"engine"`
+	Tier         string `json:"tier"`
+	Instances    int32  `json:"instances"`
+	MinInstances int32  `json:"min_instances"`
+	MaxInstances int32  `json:"max_instances"`
+	Size         string `json:"size"`
+	Storage      string `json:"storage"`
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +41,48 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported engine (postgres|redis)")
 		return
 	}
-	instances, size, storage, ok := s.normalizeDBScaling(w, engine, req.Instances, req.Size, req.Storage)
+	tier := req.Tier
+	if tier == "" {
+		tier = "standard"
+	}
+	if tier != "standard" && tier != "autoscale" {
+		writeError(w, http.StatusBadRequest, "tier must be standard or autoscale")
+		return
+	}
+	if tier == "autoscale" && engine != "postgres" {
+		writeError(w, http.StatusBadRequest, "autoscale tier is postgres-only")
+		return
+	}
+
+	size, storage, ok := s.normalizeSizeStorage(w, req.Size, req.Storage)
 	if !ok {
 		return
 	}
-	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, instances, size, storage)
+	// instances/min/max depend on tier.
+	var instances, minI, maxI int32
+	if tier == "autoscale" {
+		minI, maxI = req.MinInstances, req.MaxInstances
+		if minI < 1 {
+			minI = 1
+		}
+		if maxI < minI {
+			writeError(w, http.StatusBadRequest, "max_instances must be >= min_instances")
+			return
+		}
+		instances = minI // start at the floor
+	} else {
+		instances = req.Instances
+		if instances < 1 {
+			instances = 1
+		}
+		if engine == "redis" && instances != 1 {
+			writeError(w, http.StatusBadRequest, "redis supports a single instance")
+			return
+		}
+		minI, maxI = instances, instances
+	}
+
+	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, tier, instances, minI, maxI, size, storage)
 	if err != nil {
 		writeError(w, http.StatusConflict, "could not create database (slug may be taken)")
 		return
@@ -139,8 +179,16 @@ func (s *Server) handleScaleDatabase(w http.ResponseWriter, r *http.Request) {
 	if req.Instances == 0 {
 		req.Instances = db.Instances
 	}
-	instances, size, storage, ok := s.normalizeDBScaling(w, db.Engine, req.Instances, req.Size, req.Storage)
+	size, storage, ok := s.normalizeSizeStorage(w, req.Size, req.Storage)
 	if !ok {
+		return
+	}
+	instances := req.Instances
+	if instances < 1 {
+		instances = 1
+	}
+	if db.Engine == "redis" && instances != 1 {
+		writeError(w, http.StatusBadRequest, "redis supports a single instance")
 		return
 	}
 	if err := s.store.SetDatabaseScaling(r.Context(), db.ID, instances, size, storage); err != nil {
@@ -153,27 +201,19 @@ func (s *Server) handleScaleDatabase(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// normalizeDBScaling validates and defaults scaling inputs. Redis is limited to
-// a single instance (replicas need real clustering).
-func (s *Server) normalizeDBScaling(w http.ResponseWriter, engine string, instances int32, size, storage string) (int32, string, string, bool) {
+// normalizeSizeStorage validates and defaults size/storage inputs.
+func (s *Server) normalizeSizeStorage(w http.ResponseWriter, size, storage string) (string, string, bool) {
 	if size == "" {
 		size = instance.Small
 	}
 	if !instance.IsValid(size) {
 		writeError(w, http.StatusBadRequest, "invalid size (small|medium|large)")
-		return 0, "", "", false
+		return "", "", false
 	}
 	if storage == "" {
 		storage = "1Gi"
 	}
-	if instances < 1 {
-		instances = 1
-	}
-	if engine == "redis" && instances != 1 {
-		writeError(w, http.StatusBadRequest, "redis supports a single instance")
-		return 0, "", "", false
-	}
-	return instances, size, storage, true
+	return size, storage, true
 }
 
 func (s *Server) handleDeleteDatabase(w http.ResponseWriter, r *http.Request) {
