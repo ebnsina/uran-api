@@ -279,10 +279,11 @@ func cmdDBCreate(args []string) error {
 	max := fs.Int("max", 3, "autoscale: max instances")
 	size := fs.String("size", "small", "instance size: small|medium|large")
 	storage := fs.String("storage", "1Gi", "disk size, e.g. 5Gi")
+	pooling := fs.Bool("pooling", false, "enable a PgBouncer connection pooler (postgres)")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *project == 0 || len(rest) != 1 {
-		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] NAME")
+		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] [--pooling] NAME")
 	}
 	c, err := authed()
 	if err != nil {
@@ -292,7 +293,7 @@ func cmdDBCreate(args []string) error {
 	body := map[string]any{
 		"name": rest[0], "engine": *engine, "tier": *tier,
 		"instances": *instances, "min_instances": *min, "max_instances": *max,
-		"size": *size, "storage": *storage,
+		"size": *size, "storage": *storage, "pooling": *pooling,
 	}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), body, &db); err != nil {
 		return err
@@ -364,15 +365,19 @@ func cmdDBConnection(args []string) error {
 		return err
 	}
 	var resp struct {
-		URI     string `json:"uri"`
-		ReadURI string `json:"read_uri"`
+		URI       string `json:"uri"`
+		ReadURI   string `json:"read_uri"`
+		PooledURI string `json:"pooled_uri"`
 	}
 	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/databases/%d/connection", *id), nil, &resp); err != nil {
 		return err
 	}
 	fmt.Println(resp.URI)
 	if resp.ReadURI != "" {
-		fmt.Println("read:", resp.ReadURI)
+		fmt.Println("read:  ", resp.ReadURI)
+	}
+	if resp.PooledURI != "" {
+		fmt.Println("pooled:", resp.PooledURI)
 	}
 	return nil
 }

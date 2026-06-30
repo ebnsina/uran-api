@@ -73,6 +73,49 @@ func PostgresReadURI(rwURI, name string) string {
 	return strings.Replace(rwURI, name+"-rw", name+"-ro", 1)
 }
 
+var cnpgPoolerGVR = schema.GroupVersionResource{
+	Group:    "postgresql.cnpg.io",
+	Version:  "v1",
+	Resource: "poolers",
+}
+
+// poolerName is the PgBouncer pooler for a cluster.
+func poolerName(cluster string) string { return cluster + "-pool" }
+
+// PostgresPooledURI derives the pooled (PgBouncer) endpoint URI from the
+// read-write URI.
+func PostgresPooledURI(rwURI, cluster string) string {
+	return strings.Replace(rwURI, cluster+"-rw", poolerName(cluster), 1)
+}
+
+// ReconcilePgBouncer creates or removes a PgBouncer pooler in front of a
+// cluster's read-write endpoint.
+func (r *Reconciler) ReconcilePgBouncer(ctx context.Context, namespace, cluster string, enabled bool) error {
+	name := poolerName(cluster)
+	if !enabled {
+		err := r.dyn.Resource(cnpgPoolerGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		if ignoreNotFound(err) != nil {
+			return fmt.Errorf("delete pooler %s: %w", name, err)
+		}
+		return nil
+	}
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "postgresql.cnpg.io/v1",
+		"kind":       "Pooler",
+		"metadata":   map[string]any{"name": name, "namespace": namespace},
+		"spec": map[string]any{
+			"cluster":   map[string]any{"name": cluster},
+			"instances": int64(1),
+			"type":      "rw",
+			"pgbouncer": map[string]any{"poolMode": "transaction"},
+		},
+	}}
+	if _, err := r.dyn.Resource(cnpgPoolerGVR).Namespace(namespace).Apply(ctx, name, obj, applyOpts()); err != nil {
+		return fmt.Errorf("apply pooler %s: %w", name, err)
+	}
+	return nil
+}
+
 // WaitPostgresReady polls until the cluster reports at least one ready instance.
 func (r *Reconciler) WaitPostgresReady(ctx context.Context, namespace, name string) error {
 	ctx, cancel := context.WithTimeout(ctx, dbProvisionTimeout)
@@ -111,8 +154,11 @@ func (r *Reconciler) PostgresConnectionURI(ctx context.Context, namespace, name 
 	return string(uri), nil
 }
 
-// DeletePostgres removes a managed Postgres cluster.
+// DeletePostgres removes a managed Postgres cluster and its pooler (if any).
 func (r *Reconciler) DeletePostgres(ctx context.Context, namespace, name string) error {
+	if err := r.dyn.Resource(cnpgPoolerGVR).Namespace(namespace).Delete(ctx, poolerName(name), metav1.DeleteOptions{}); ignoreNotFound(err) != nil {
+		return fmt.Errorf("delete pooler %s: %w", name, err)
+	}
 	err := r.dyn.Resource(cnpgClusterGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if ignoreNotFound(err) != nil {
 		return fmt.Errorf("delete postgres cluster %s: %w", name, err)

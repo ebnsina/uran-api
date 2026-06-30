@@ -196,7 +196,19 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 		p.failDatabase(ctx, log, dbID)
 		return
 	}
-	if err := p.store.SetDatabaseConnection(ctx, dbID, uri, readURI); err != nil {
+	// Optional PgBouncer pooler (Postgres only).
+	var pooledURI string
+	if db.Engine == "postgres" {
+		if err := p.recon.ReconcilePgBouncer(ctx, namespace, cluster, db.Pooling); err != nil {
+			log.Error("reconcile pooler", "err", err)
+			p.failDatabase(ctx, log, dbID)
+			return
+		}
+		if db.Pooling {
+			pooledURI = k8s.PostgresPooledURI(uri, cluster)
+		}
+	}
+	if err := p.store.SetDatabaseConnection(ctx, dbID, uri, readURI, pooledURI); err != nil {
 		log.Error("store connection uri", "err", err)
 		return
 	}

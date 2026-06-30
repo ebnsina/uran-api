@@ -21,6 +21,7 @@ type createDatabaseReq struct {
 	MaxInstances int32  `json:"max_instances"`
 	Size         string `json:"size"`
 	Storage      string `json:"storage"`
+	Pooling      bool   `json:"pooling"`
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +83,8 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		minI, maxI = instances, instances
 	}
 
-	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, tier, instances, minI, maxI, size, storage)
+	pooling := req.Pooling && engine == "postgres"
+	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, tier, instances, minI, maxI, size, storage, pooling)
 	if err != nil {
 		writeError(w, http.StatusConflict, "could not create database (slug may be taken)")
 		return
@@ -148,6 +150,9 @@ func (s *Server) handleDatabaseConnection(w http.ResponseWriter, r *http.Request
 	resp := map[string]string{"uri": db.ConnectionURI}
 	if db.ReadURI != "" {
 		resp["read_uri"] = db.ReadURI
+	}
+	if db.PooledURI != "" {
+		resp["pooled_uri"] = db.PooledURI
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
