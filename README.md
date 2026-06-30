@@ -12,8 +12,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   skipping the build.
 - **Multiple service types** — HTTP web services, static sites, background
   workers (no inbound routing), and scheduled cron jobs.
-- **Managed databases** — provision a Postgres instance per project
-  (CloudNativePG); apps connect via an in-namespace connection URI.
+- **Managed databases** — provision Postgres (CloudNativePG) or Redis per
+  project; apps connect via an in-namespace connection URI.
 - **Zero-config builds** — [Nixpacks](https://nixpacks.com) detects the stack;
   images are cached and pushed to a registry.
 - **Kubernetes runtime** — each deploy is reconciled into a Deployment, Service,
@@ -86,7 +86,7 @@ uran env list --service 3
 uran rollback --deploy 5                  # redeploy a prior image (no rebuild)
 uran domain add  --service 3 app.example.com
 uran domain list --service 3
-uran db create     --project 1 maindb
+uran db create     --project 1 maindb            # or --engine redis
 uran db connection --database 1
 uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4
 uran health --service 3 --path /healthz

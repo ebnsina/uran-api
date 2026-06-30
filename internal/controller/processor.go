@@ -180,19 +180,9 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 	namespace := naming.NamespaceForOrg(orgID)
 	cluster := naming.DatabaseCluster(db.Slug)
 
-	if err := p.recon.ProvisionPostgres(ctx, namespace, cluster); err != nil {
-		log.Error("provision postgres", "err", err)
-		p.failDatabase(ctx, log, dbID)
-		return
-	}
-	if err := p.recon.WaitPostgresReady(ctx, namespace, cluster); err != nil {
-		log.Error("wait postgres ready", "err", err)
-		p.failDatabase(ctx, log, dbID)
-		return
-	}
-	uri, err := p.recon.PostgresConnectionURI(ctx, namespace, cluster)
+	uri, err := p.provisionEngine(ctx, db.Engine, namespace, cluster)
 	if err != nil {
-		log.Error("read connection uri", "err", err)
+		log.Error("provision database", "engine", db.Engine, "err", err)
 		p.failDatabase(ctx, log, dbID)
 		return
 	}
@@ -200,21 +190,52 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 		log.Error("store connection uri", "err", err)
 		return
 	}
-	log.Info("database ready", "cluster", cluster)
+	log.Info("database ready", "engine", db.Engine, "cluster", cluster)
 }
 
-// teardownDatabase deletes a managed cluster. Payload is "<namespace>:<cluster>".
+// provisionEngine provisions the requested engine and returns its connection
+// URI once ready.
+func (p *Processor) provisionEngine(ctx context.Context, engine, namespace, cluster string) (string, error) {
+	switch engine {
+	case "redis":
+		if err := p.recon.ProvisionRedis(ctx, namespace, cluster); err != nil {
+			return "", err
+		}
+		if err := p.recon.WaitRedisReady(ctx, namespace, cluster); err != nil {
+			return "", err
+		}
+		return p.recon.RedisConnectionURI(namespace, cluster), nil
+	default: // postgres
+		if err := p.recon.ProvisionPostgres(ctx, namespace, cluster); err != nil {
+			return "", err
+		}
+		if err := p.recon.WaitPostgresReady(ctx, namespace, cluster); err != nil {
+			return "", err
+		}
+		return p.recon.PostgresConnectionURI(ctx, namespace, cluster)
+	}
+}
+
+// teardownDatabase deletes a managed instance. Payload is
+// "<namespace>:<cluster>:<engine>".
 func (p *Processor) teardownDatabase(ctx context.Context, payload string) {
-	namespace, cluster, ok := strings.Cut(payload, ":")
-	if !ok {
+	parts := strings.Split(payload, ":")
+	if len(parts) != 3 {
 		p.log.Warn("bad database teardown notification", "payload", payload)
 		return
 	}
-	if err := p.recon.DeletePostgres(ctx, namespace, cluster); err != nil {
-		p.log.Error("delete postgres", "cluster", cluster, "err", err)
+	namespace, cluster, engine := parts[0], parts[1], parts[2]
+	var err error
+	if engine == "redis" {
+		err = p.recon.DeleteRedis(ctx, namespace, cluster)
+	} else {
+		err = p.recon.DeletePostgres(ctx, namespace, cluster)
+	}
+	if err != nil {
+		p.log.Error("delete database", "cluster", cluster, "engine", engine, "err", err)
 		return
 	}
-	p.log.Info("database torn down", "cluster", cluster)
+	p.log.Info("database torn down", "cluster", cluster, "engine", engine)
 }
 
 func (p *Processor) failDatabase(ctx context.Context, log *slog.Logger, dbID int64) {
