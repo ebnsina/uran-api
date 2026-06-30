@@ -12,6 +12,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   images are cached and pushed to a registry.
 - **Kubernetes runtime** — each deploy is reconciled into a Deployment, Service,
   and Traefik route via Server-Side Apply, with rollout health checks.
+- **Tenant isolation** — each org gets its own namespace with a NetworkPolicy
+  (deny cross-tenant ingress), a ResourceQuota, and default resource limits.
 - **Preview environments** — every pull request gets an isolated environment on
   its own hostname, torn down when the PR closes.
 - **Custom domains & automatic TLS** — attach your own hostnames; certificates

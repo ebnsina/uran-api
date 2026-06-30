@@ -65,6 +65,9 @@ func (r *Reconciler) Apply(ctx context.Context, spec ServiceSpec) error {
 	if err := r.ensureNamespace(ctx, spec.Namespace); err != nil {
 		return err
 	}
+	if err := r.applyNamespacePolicies(ctx, spec.Namespace); err != nil {
+		return err
+	}
 	if err := r.applyEnvSecret(ctx, spec); err != nil {
 		return err
 	}
@@ -120,6 +123,7 @@ func (r *Reconciler) applyDeployment(ctx context.Context, spec ServiceSpec) erro
 						WithName("app").
 						WithImage(spec.Image).
 						WithPorts(coreac.ContainerPort().WithContainerPort(spec.Port)).
+						WithResources(containerResources()).
 						WithEnv(coreac.EnvVar().WithName("PORT").WithValue(fmt.Sprintf("%d", spec.Port))).
 						WithEnvFrom(coreac.EnvFromSource().WithSecretRef(
 							coreac.SecretEnvSource().WithName(envSecretName(spec.Name)),
