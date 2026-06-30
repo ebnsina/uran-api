@@ -79,10 +79,11 @@ func (p *Processor) process(ctx context.Context, deployID int64) {
 
 	logs := newDBLogWriter(ctx, p.store, b.ID)
 	result, buildErr := p.backend.Build(ctx, build.Request{
-		RepoURL: svc.RepoURL,
-		Ref:     d.CommitSHA,
-		Image:   image,
-		Type:    svc.Type,
+		RepoURL:   svc.RepoURL,
+		Ref:       d.CommitSHA,
+		Image:     image,
+		Type:      svc.Type,
+		BuildArgs: p.buildArgs(ctx, svc.ID),
 	}, logs)
 
 	if buildErr != nil {
@@ -109,6 +110,22 @@ func (p *Processor) process(ctx context.Context, deployID int64) {
 		log.Warn("notify deployment failed", "err", err)
 	}
 	log.Info("build succeeded", "image", result.Image)
+}
+
+// buildArgs returns the service's build-time env vars as a map. Failures are
+// non-fatal (the build proceeds without them).
+func (p *Processor) buildArgs(ctx context.Context, serviceID int64) map[string]string {
+	vars, err := p.store.ListEnvVars(ctx, serviceID)
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, v := range vars {
+		if v.BuildTime {
+			out[v.Key] = v.Value
+		}
+	}
+	return out
 }
 
 // fail records a failed build and deploy, best-effort.

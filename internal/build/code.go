@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // CodeBuilder builds an image from source: if the repository has a Dockerfile
@@ -37,17 +38,19 @@ func (b *CodeBuilder) Build(ctx context.Context, req Request, logs io.Writer) (R
 
 	if hasDockerfile(dir) {
 		fmt.Fprintln(logs, "detected Dockerfile — building with docker build")
-		if err := runStream(ctx, logs, dir, "docker", "build", "-t", req.Image, "."); err != nil {
+		args := []string{"build", "-t", req.Image}
+		args = append(args, buildArgFlags("--build-arg", req.BuildArgs)...)
+		args = append(args, ".")
+		if err := runStream(ctx, logs, dir, "docker", args...); err != nil {
 			return Result{}, err
 		}
 	} else {
 		fmt.Fprintln(logs, "no Dockerfile — building with Nixpacks")
 		// --cache-key keys the build cache to this service+target so repeated
 		// deploys reuse layers.
-		if err := runStream(ctx, logs, "", "nixpacks", "build", dir,
-			"--name", req.Image,
-			"--cache-key", req.Image,
-		); err != nil {
+		args := []string{"build", dir, "--name", req.Image, "--cache-key", req.Image}
+		args = append(args, buildArgFlags("--env", req.BuildArgs)...)
+		if err := runStream(ctx, logs, "", "nixpacks", args...); err != nil {
 			return Result{}, err
 		}
 	}
@@ -61,6 +64,21 @@ func (b *CodeBuilder) Build(ctx context.Context, req Request, logs io.Writer) (R
 func hasDockerfile(dir string) bool {
 	info, err := os.Stat(filepath.Join(dir, "Dockerfile"))
 	return err == nil && !info.IsDir()
+}
+
+// buildArgFlags expands a map into repeated "flag KEY=VALUE" arguments, sorted
+// for deterministic output.
+func buildArgFlags(flag string, args map[string]string) []string {
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys)*2)
+	for _, k := range keys {
+		out = append(out, flag, k+"="+args[k])
+	}
+	return out
 }
 
 // cloneRepo clones repoURL into dir and optionally checks out ref.
