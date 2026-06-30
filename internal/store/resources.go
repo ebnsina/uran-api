@@ -112,11 +112,13 @@ func (s *Store) ListProjects(ctx context.Context, orgID int64) ([]Project, error
 }
 
 // serviceCols is the canonical column list for selecting a service.
-const serviceCols = `id, project_id, name, slug, type, repo_url, branch, schedule, created_at`
+const serviceCols = `id, project_id, name, slug, type, repo_url, branch, schedule,
+	replicas, instance_size, health_path, min_replicas, max_replicas, created_at`
 
 func scanService(sc scanner) (Service, error) {
 	var svc Service
-	err := sc.Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.Schedule, &svc.CreatedAt)
+	err := sc.Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.Schedule,
+		&svc.Replicas, &svc.InstanceSize, &svc.HealthPath, &svc.MinReplicas, &svc.MaxReplicas, &svc.CreatedAt)
 	return svc, err
 }
 

@@ -323,6 +323,54 @@ func cmdDomainRm(args []string) error {
 	return nil
 }
 
+// cmdScale updates a service's replicas, instance size, and autoscaling bounds.
+func cmdScale(args []string) error {
+	fs := flag.NewFlagSet("scale", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	replicas := fs.Int("replicas", 1, "fixed replica count (ignored when autoscaling)")
+	size := fs.String("size", "small", "instance size: small|medium|large")
+	min := fs.Int("min", 0, "autoscale min replicas (0 disables autoscaling)")
+	max := fs.Int("max", 0, "autoscale max replicas (0 disables autoscaling)")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran scale --service ID [--replicas N] [--size small|medium|large] [--min N --max N]")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	body := map[string]any{"replicas": *replicas, "instance_size": *size, "min_replicas": *min, "max_replicas": *max}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/scale", *service), body, nil); err != nil {
+		return err
+	}
+	if *max > 0 {
+		fmt.Printf("autoscaling %d–%d (%s); applying\n", *min, *max, *size)
+	} else {
+		fmt.Printf("scaled to %d × %s; applying\n", *replicas, *size)
+	}
+	return nil
+}
+
+// cmdHealth sets a service's HTTP health-check path (empty for a TCP check).
+func cmdHealth(args []string) error {
+	fs := flag.NewFlagSet("health", flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	path := fs.String("path", "", "HTTP health-check path, e.g. /healthz")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran health --service ID --path /healthz")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/health", *service), map[string]string{"path": *path}, nil); err != nil {
+		return err
+	}
+	fmt.Printf("health check set to %q; applying\n", *path)
+	return nil
+}
+
 // cmdEnv dispatches env subcommands: list, set, rm.
 func cmdEnv(args []string) error {
 	if len(args) == 0 {

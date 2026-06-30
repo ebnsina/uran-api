@@ -23,6 +23,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 - **Custom domains & automatic TLS** — attach your own hostnames; certificates
   are provisioned by cert-manager and served over HTTPS.
 - **Env vars & secrets** — injected into workloads via per-service Secrets.
+- **Scaling & autoscaling** — set replica count and instance size, or autoscale
+  on CPU (HPA), with readiness/liveness health checks gating rollouts.
 - **Instant rollback** — redeploy any previous image without rebuilding.
 - **CLI** — drive the whole flow from the terminal with `uran`.
 
@@ -73,6 +75,8 @@ uran domain add  --service 3 app.example.com
 uran domain list --service 3
 uran db create     --project 1 maindb
 uran db connection --database 1
+uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4
+uran health --service 3 --path /healthz
 ```
 
 ## API
@@ -98,6 +102,8 @@ uran db connection --database 1
 | GET/POST | `/v1/projects/{projectID}/databases` | bearer | List / create managed databases |
 | GET/DELETE | `/v1/databases/{databaseID}` | bearer | Get / delete a database |
 | GET | `/v1/databases/{databaseID}/connection` | bearer | Connection URI (when ready) |
+| POST | `/v1/services/{serviceID}/scale` | bearer | Replicas, instance size, autoscaling |
+| POST | `/v1/services/{serviceID}/health` | bearer | Set health-check path |
 | POST | `/v1/webhooks/github` | HMAC | GitHub push / pull_request events |
 
 Authenticated requests send `Authorization: Bearer <token>`. The webhook is

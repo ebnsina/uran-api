@@ -115,14 +115,19 @@ func (p *Processor) reconcile(ctx context.Context, deployID int64) {
 	}
 
 	spec := k8s.ServiceSpec{
-		Namespace: naming.NamespaceForOrg(orgID),
-		Name:      naming.WorkloadName(svc.Slug, d.Kind, d.PRNumber),
-		Type:      svc.Type,
-		Image:     d.Image,
-		Port:      servicePort,
-		Schedule:  svc.Schedule,
-		Env:       envMap(envVars),
-		Domains:   domains,
+		Namespace:    naming.NamespaceForOrg(orgID),
+		Name:         naming.WorkloadName(svc.Slug, d.Kind, d.PRNumber),
+		Type:         svc.Type,
+		Image:        d.Image,
+		Port:         servicePort,
+		Schedule:     svc.Schedule,
+		Env:          envMap(envVars),
+		Domains:      domains,
+		Replicas:     svc.Replicas,
+		InstanceSize: svc.InstanceSize,
+		HealthPath:   svc.HealthPath,
+		MinReplicas:  svc.MinReplicas,
+		MaxReplicas:  svc.MaxReplicas,
 	}
 	if err := p.recon.Apply(ctx, spec); err != nil {
 		log.Error("reconcile failed", "err", err)
