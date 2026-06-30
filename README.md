@@ -29,6 +29,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   on CPU (HPA), with readiness/liveness health checks gating rollouts.
 - **Persistent disks** — attach a volume to a service for stateful workloads;
   data survives restarts and redeploys.
+- **Team roles (RBAC)** — owner / admin / member / viewer, with viewer
+  read-only and admin/owner-gated member management.
 - **API tokens** — issue personal access tokens for CI and programmatic access.
 - **Observability** — stream live runtime logs and read per-pod CPU/memory.
 - **Instant rollback** — redeploy any previous image without rebuilding.
@@ -73,6 +75,8 @@ go build -o uran ./cmd/uran
 uran login    --api http://localhost:8080 --email you@example.com --password ****
 uran login    --api http://localhost:8080 --token uran_pat_…    # CI / token auth
 uran token create --name ci               # issue a personal access token
+uran member add  --org 1 --email dev@x.io --role member
+uran member list --org 1
 uran deploy   --service 3                 # build + deploy from the service's repo
 uran deploy   --service 3 --image registry/app:1.2.3   # deploy a prebuilt image
 uran logs     --deploy 6                  # stream build logs
@@ -103,6 +107,8 @@ uran metrics --service 3                  # per-pod CPU/memory
 | GET/POST | `/v1/tokens` | bearer | List / create API tokens |
 | DELETE | `/v1/tokens/{tokenID}` | bearer | Revoke an API token |
 | GET/POST | `/v1/orgs` | bearer | List / create orgs |
+| GET/POST | `/v1/orgs/{orgID}/members` | bearer | List / add members (add: admin+) |
+| PATCH/DELETE | `/v1/orgs/{orgID}/members/{userID}` | bearer | Set role / remove (admin+) |
 | GET/POST | `/v1/orgs/{orgID}/projects` | bearer | List / create projects |
 | GET/POST | `/v1/projects/{projectID}/services` | bearer | List / create services |
 | GET/POST | `/v1/services/{serviceID}/deploys` | bearer | List / trigger Git build deploys |

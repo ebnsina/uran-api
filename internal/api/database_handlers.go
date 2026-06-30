@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ebnsina/uran-api/internal/auth"
 	"github.com/ebnsina/uran-api/internal/naming"
 	"github.com/ebnsina/uran-api/internal/store"
 )
@@ -62,7 +61,6 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 // requireDatabaseAccess resolves {databaseID} and verifies org membership,
 // returning the database and its org id.
 func (s *Server) requireDatabaseAccess(w http.ResponseWriter, r *http.Request) (store.Database, int64, bool) {
-	u, _ := auth.UserFrom(r.Context())
 	id, err := strconv.ParseInt(chi.URLParam(r, "databaseID"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid database id")
@@ -73,9 +71,7 @@ func (s *Server) requireDatabaseAccess(w http.ResponseWriter, r *http.Request) (
 		writeError(w, http.StatusNotFound, "database not found")
 		return store.Database{}, 0, false
 	}
-	member, err := s.store.IsOrgMember(r.Context(), u.ID, orgID)
-	if err != nil || !member {
-		writeError(w, http.StatusForbidden, "no access to this database")
+	if _, ok := s.authorizeOrg(w, r, orgID); !ok {
 		return store.Database{}, 0, false
 	}
 	return db, orgID, true

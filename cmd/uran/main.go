@@ -28,6 +28,7 @@ func main() {
 		"disk":     cmdDisk,
 		"metrics":  cmdMetrics,
 		"token":    cmdToken,
+		"member":   cmdMember,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -49,6 +50,10 @@ Usage:
   uran token create --name NAME
   uran token list
   uran token rm  --id ID
+  uran member list     --org ID
+  uran member add      --org ID --email EMAIL [--role member]
+  uran member set-role --org ID --user ID --role ROLE
+  uran member rm       --org ID --user ID
   uran whoami
   uran deploy   --service ID [--commit SHA | --image REF]
   uran status   --deploy ID

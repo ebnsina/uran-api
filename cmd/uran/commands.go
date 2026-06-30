@@ -459,6 +459,111 @@ func cmdMetrics(args []string) error {
 	return nil
 }
 
+type member struct {
+	UserID int64  `json:"user_id"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+}
+
+// cmdMember dispatches member subcommands: list, add, set-role, rm.
+func cmdMember(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: uran member <list|add|set-role|rm> --org ID ...")
+	}
+	switch args[0] {
+	case "list":
+		return cmdMemberList(args[1:])
+	case "add":
+		return cmdMemberAdd(args[1:])
+	case "set-role":
+		return cmdMemberSetRole(args[1:])
+	case "rm":
+		return cmdMemberRm(args[1:])
+	default:
+		return fmt.Errorf("unknown member subcommand %q", args[0])
+	}
+}
+
+func cmdMemberList(args []string) error {
+	fs := flag.NewFlagSet("member list", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	_ = fs.Parse(args)
+	if *org == 0 {
+		return fmt.Errorf("usage: uran member list --org ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var members []member
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/orgs/%d/members", *org), nil, &members); err != nil {
+		return err
+	}
+	for _, m := range members {
+		fmt.Printf("%d  %-28s %s\n", m.UserID, m.Email, m.Role)
+	}
+	return nil
+}
+
+func cmdMemberAdd(args []string) error {
+	fs := flag.NewFlagSet("member add", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	email := fs.String("email", "", "user email")
+	role := fs.String("role", "member", "role: viewer|member|admin|owner")
+	_ = fs.Parse(args)
+	if *org == 0 || *email == "" {
+		return fmt.Errorf("usage: uran member add --org ID --email EMAIL [--role member]")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/orgs/%d/members", *org), map[string]string{"email": *email, "role": *role}, nil); err != nil {
+		return err
+	}
+	fmt.Printf("added %s as %s\n", *email, *role)
+	return nil
+}
+
+func cmdMemberSetRole(args []string) error {
+	fs := flag.NewFlagSet("member set-role", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	user := fs.Int64("user", 0, "user id")
+	role := fs.String("role", "", "role: viewer|member|admin|owner")
+	_ = fs.Parse(args)
+	if *org == 0 || *user == 0 || *role == "" {
+		return fmt.Errorf("usage: uran member set-role --org ID --user ID --role ROLE")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPatch, fmt.Sprintf("/v1/orgs/%d/members/%d", *org, *user), map[string]string{"role": *role}, nil); err != nil {
+		return err
+	}
+	fmt.Printf("set user %d to %s\n", *user, *role)
+	return nil
+}
+
+func cmdMemberRm(args []string) error {
+	fs := flag.NewFlagSet("member rm", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	user := fs.Int64("user", 0, "user id")
+	_ = fs.Parse(args)
+	if *org == 0 || *user == 0 {
+		return fmt.Errorf("usage: uran member rm --org ID --user ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodDelete, fmt.Sprintf("/v1/orgs/%d/members/%d", *org, *user), nil, nil); err != nil {
+		return err
+	}
+	fmt.Printf("removed user %d\n", *user)
+	return nil
+}
+
 // cmdScale updates a service's replicas, instance size, and autoscaling bounds.
 func cmdScale(args []string) error {
 	fs := flag.NewFlagSet("scale", flag.ExitOnError)

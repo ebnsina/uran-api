@@ -8,13 +8,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ebnsina/uran-api/internal/auth"
 	"github.com/ebnsina/uran-api/internal/store"
 )
 
-// requireServiceAccess resolves {serviceID} and verifies org membership.
+// requireServiceAccess resolves {serviceID} and authorizes the caller's role.
 func (s *Server) requireServiceAccess(w http.ResponseWriter, r *http.Request) (store.Service, bool) {
-	u, _ := auth.UserFrom(r.Context())
 	id, err := strconv.ParseInt(chi.URLParam(r, "serviceID"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid service id")
@@ -25,9 +23,7 @@ func (s *Server) requireServiceAccess(w http.ResponseWriter, r *http.Request) (s
 		writeError(w, http.StatusNotFound, "service not found")
 		return store.Service{}, false
 	}
-	member, err := s.store.IsOrgMember(r.Context(), u.ID, orgID)
-	if err != nil || !member {
-		writeError(w, http.StatusForbidden, "no access to this service")
+	if _, ok := s.authorizeOrg(w, r, orgID); !ok {
 		return store.Service{}, false
 	}
 	return svc, true
@@ -98,7 +94,6 @@ func (s *Server) handleListDeploys(w http.ResponseWriter, r *http.Request) {
 // requireDeployAccess resolves {deployID} and verifies the requester belongs to
 // the owning service's org.
 func (s *Server) requireDeployAccess(w http.ResponseWriter, r *http.Request) (store.Deploy, bool) {
-	u, _ := auth.UserFrom(r.Context())
 	id, err := strconv.ParseInt(chi.URLParam(r, "deployID"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid deploy id")
@@ -114,9 +109,7 @@ func (s *Server) requireDeployAccess(w http.ResponseWriter, r *http.Request) (st
 		writeError(w, http.StatusNotFound, "deploy not found")
 		return store.Deploy{}, false
 	}
-	member, err := s.store.IsOrgMember(r.Context(), u.ID, orgID)
-	if err != nil || !member {
-		writeError(w, http.StatusForbidden, "no access to this deploy")
+	if _, ok := s.authorizeOrg(w, r, orgID); !ok {
 		return store.Deploy{}, false
 	}
 	return d, true
