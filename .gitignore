@@ -1,0 +1,10 @@
+# Build output
+/bin/
+*.out
+
+# Local secrets / env
+.env
+
+# Internal planning & scratch data — kept local, never committed
+/docs/
+/data/
