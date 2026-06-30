@@ -30,6 +30,7 @@ func main() {
 		"token":    cmdToken,
 		"member":   cmdMember,
 		"audit":    cmdAudit,
+		"registry": cmdRegistry,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -55,6 +56,9 @@ Usage:
   uran member add      --org ID --email EMAIL [--role member]
   uran member set-role --org ID --user ID --role ROLE
   uran member rm       --org ID --user ID
+  uran registry list --org ID
+  uran registry add  --org ID --registry HOST --username U --password P
+  uran registry rm   --org ID --id CRED_ID
   uran whoami
   uran deploy   --service ID [--commit SHA | --image REF]
   uran status   --deploy ID

@@ -36,6 +36,7 @@ type ServiceSpec struct {
 	MaxReplicas  int32             // autoscale ceiling
 	DiskSize     string            // persistent disk size (e.g. "1Gi"); empty means none
 	DiskPath     string            // mount path for the disk
+	PullCreds    []RegistryCred    // private registry credentials for image pulls
 }
 
 // hasDisk reports whether a persistent disk is attached.
@@ -84,6 +85,9 @@ func (r *Reconciler) Apply(ctx context.Context, spec ServiceSpec) error {
 		return err
 	}
 	if err := r.applyNamespacePolicies(ctx, spec.Namespace); err != nil {
+		return err
+	}
+	if err := r.reconcilePullSecret(ctx, spec.Namespace, spec.PullCreds); err != nil {
 		return err
 	}
 	if err := r.applyEnvSecret(ctx, spec); err != nil {
@@ -174,6 +178,9 @@ func (r *Reconciler) applyDeployment(ctx context.Context, spec ServiceSpec) erro
 	if spec.hasDisk() {
 		podSpec = podSpec.WithVolumes(coreac.Volume().WithName(diskVolumeName).
 			WithPersistentVolumeClaim(coreac.PersistentVolumeClaimVolumeSource().WithClaimName(pvcName(spec.Name))))
+	}
+	if len(spec.PullCreds) > 0 {
+		podSpec = podSpec.WithImagePullSecrets(coreac.LocalObjectReference().WithName(pullSecretName))
 	}
 
 	depSpec := appsac.DeploymentSpec().

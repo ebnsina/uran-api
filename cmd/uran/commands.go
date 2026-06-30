@@ -498,6 +498,91 @@ type member struct {
 	Role   string `json:"role"`
 }
 
+type registryCred struct {
+	ID       int64  `json:"id"`
+	Registry string `json:"registry"`
+	Username string `json:"username"`
+}
+
+// cmdRegistry dispatches registry-credential subcommands: list, add, rm.
+func cmdRegistry(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: uran registry <list|add|rm> --org ID ...")
+	}
+	switch args[0] {
+	case "list":
+		return cmdRegistryList(args[1:])
+	case "add":
+		return cmdRegistryAdd(args[1:])
+	case "rm":
+		return cmdRegistryRm(args[1:])
+	default:
+		return fmt.Errorf("unknown registry subcommand %q", args[0])
+	}
+}
+
+func cmdRegistryList(args []string) error {
+	fs := flag.NewFlagSet("registry list", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	_ = fs.Parse(args)
+	if *org == 0 {
+		return fmt.Errorf("usage: uran registry list --org ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var creds []registryCred
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/orgs/%d/registry-credentials", *org), nil, &creds); err != nil {
+		return err
+	}
+	for _, cr := range creds {
+		fmt.Printf("%d  %-30s %s\n", cr.ID, cr.Registry, cr.Username)
+	}
+	return nil
+}
+
+func cmdRegistryAdd(args []string) error {
+	fs := flag.NewFlagSet("registry add", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	registry := fs.String("registry", "", "registry host, e.g. ghcr.io")
+	username := fs.String("username", "", "registry username")
+	password := fs.String("password", "", "registry password / token")
+	_ = fs.Parse(args)
+	if *org == 0 || *registry == "" || *username == "" || *password == "" {
+		return fmt.Errorf("usage: uran registry add --org ID --registry HOST --username U --password P")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	body := map[string]string{"registry": *registry, "username": *username, "password": *password}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/orgs/%d/registry-credentials", *org), body, nil); err != nil {
+		return err
+	}
+	fmt.Printf("saved credentials for %s\n", *registry)
+	return nil
+}
+
+func cmdRegistryRm(args []string) error {
+	fs := flag.NewFlagSet("registry rm", flag.ExitOnError)
+	org := fs.Int64("org", 0, "org id")
+	id := fs.Int64("id", 0, "credential id")
+	_ = fs.Parse(args)
+	if *org == 0 || *id == 0 {
+		return fmt.Errorf("usage: uran registry rm --org ID --id CRED_ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodDelete, fmt.Sprintf("/v1/orgs/%d/registry-credentials/%d", *org, *id), nil, nil); err != nil {
+		return err
+	}
+	fmt.Printf("deleted credential %d\n", *id)
+	return nil
+}
+
 // cmdMember dispatches member subcommands: list, add, set-role, rm.
 func cmdMember(args []string) error {
 	if len(args) == 0 {
