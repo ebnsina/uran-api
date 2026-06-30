@@ -3,11 +3,14 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/ebnsina/uran-api/internal/instance"
 )
 
 // cnpgClusterGVR is the CloudNativePG Cluster resource.
@@ -21,15 +24,25 @@ var cnpgClusterGVR = schema.GroupVersionResource{
 // ready (image pull + initdb can take a couple of minutes).
 const dbProvisionTimeout = 5 * time.Minute
 
-// ProvisionPostgres creates a single-instance CloudNativePG cluster in the
-// namespace (ensuring the namespace and its isolation policies exist first).
-func (r *Reconciler) ProvisionPostgres(ctx context.Context, namespace, name string) error {
+// PostgresSpec is the desired managed-Postgres configuration.
+type PostgresSpec struct {
+	Instances int32  // number of nodes (>1 enables HA + a read endpoint)
+	Size      string // instance.* size for CPU/memory
+	Storage   string // PVC size, e.g. "1Gi"
+}
+
+// ProvisionPostgres creates/updates a CloudNativePG cluster in the namespace
+// (ensuring the namespace and its isolation policies exist first). With more
+// than one instance, CNPG runs a primary plus standbys and exposes a
+// load-balanced read-only service.
+func (r *Reconciler) ProvisionPostgres(ctx context.Context, namespace, name string, spec PostgresSpec) error {
 	if err := r.ensureNamespace(ctx, namespace); err != nil {
 		return err
 	}
 	if err := r.applyNamespacePolicies(ctx, namespace); err != nil {
 		return err
 	}
+	res := instance.Get(spec.Size)
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "postgresql.cnpg.io/v1",
 		"kind":       "Cluster",
@@ -38,12 +51,12 @@ func (r *Reconciler) ProvisionPostgres(ctx context.Context, namespace, name stri
 			"namespace": namespace,
 		},
 		"spec": map[string]any{
-			"instances": int64(1),
-			"storage":   map[string]any{"size": "1Gi"},
+			"instances": int64(spec.Instances),
+			"storage":   map[string]any{"size": spec.Storage},
 			// Explicit resources so the pods satisfy the namespace ResourceQuota.
 			"resources": map[string]any{
-				"requests": map[string]any{"cpu": "50m", "memory": "128Mi"},
-				"limits":   map[string]any{"cpu": "500m", "memory": "512Mi"},
+				"requests": map[string]any{"cpu": res.CPURequest, "memory": res.MemRequest},
+				"limits":   map[string]any{"cpu": res.CPULimit, "memory": res.MemLimit},
 			},
 		},
 	}}
@@ -52,6 +65,12 @@ func (r *Reconciler) ProvisionPostgres(ctx context.Context, namespace, name stri
 		return fmt.Errorf("apply postgres cluster %s: %w", name, err)
 	}
 	return nil
+}
+
+// PostgresReadURI returns the load-balanced read-only endpoint URI, derived from
+// the read-write URI by swapping the CNPG service suffix.
+func PostgresReadURI(rwURI, name string) string {
+	return strings.Replace(rwURI, name+"-rw", name+"-ro", 1)
 }
 
 // WaitPostgresReady polls until the cluster reports at least one ready instance.

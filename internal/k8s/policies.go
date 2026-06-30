@@ -28,8 +28,13 @@ const (
 	containerMemLim = "256Mi"
 )
 
-// kubeSystemNamespace is where Traefik runs; its ingress must be allowed.
-const kubeSystemNamespace = "kube-system"
+// Platform namespaces whose pods must reach tenant workloads: kube-system runs
+// Traefik (ingress) and cnpg-system runs the CloudNativePG operator (which
+// coordinates database instances and reads their status).
+const (
+	kubeSystemNamespace = "kube-system"
+	cnpgSystemNamespace = "cnpg-system"
+)
 
 // applyNamespacePolicies installs the ResourceQuota, LimitRange, and
 // NetworkPolicy that isolate an org's namespace from other tenants.
@@ -91,6 +96,11 @@ func (r *Reconciler) applyNetworkPolicy(ctx context.Context, ns string) error {
 				netac.NetworkPolicyPeer().WithNamespaceSelector(
 					metaac.LabelSelector().WithMatchLabels(map[string]string{
 						"kubernetes.io/metadata.name": kubeSystemNamespace,
+					}),
+				),
+				netac.NetworkPolicyPeer().WithNamespaceSelector(
+					metaac.LabelSelector().WithMatchLabels(map[string]string{
+						"kubernetes.io/metadata.name": cnpgSystemNamespace,
 					}),
 				),
 			)),

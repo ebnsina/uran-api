@@ -103,6 +103,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/projects/{projectID}/databases", s.handleCreateDatabase)
 		r.Get("/v1/databases/{databaseID}", s.handleGetDatabase)
 		r.Get("/v1/databases/{databaseID}/connection", s.handleDatabaseConnection)
+		r.Post("/v1/databases/{databaseID}/scale", s.handleScaleDatabase)
 		r.Delete("/v1/databases/{databaseID}", s.handleDeleteDatabase)
 	})
 
