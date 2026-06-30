@@ -10,6 +10,8 @@ import (
 	coreac "k8s.io/client-go/applyconfigurations/core/v1"
 	metaac "k8s.io/client-go/applyconfigurations/meta/v1"
 	netac "k8s.io/client-go/applyconfigurations/networking/v1"
+
+	"github.com/ebnsina/uran-api/internal/instance"
 )
 
 // Per-namespace (per-org) isolation policy. These are platform-wide defaults,
@@ -99,16 +101,17 @@ func (r *Reconciler) applyNetworkPolicy(ctx context.Context, ns string) error {
 	return nil
 }
 
-// containerResources returns the per-container requests/limits applied to every
-// workload, satisfying the namespace ResourceQuota.
-func containerResources() *coreac.ResourceRequirementsApplyConfiguration {
+// containerResources returns the per-container requests/limits for an instance
+// size, satisfying the namespace ResourceQuota.
+func containerResources(size string) *coreac.ResourceRequirementsApplyConfiguration {
+	r := instance.Get(size)
 	return coreac.ResourceRequirements().
 		WithRequests(corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(containerCPUreq),
-			corev1.ResourceMemory: resource.MustParse(containerMemReq),
+			corev1.ResourceCPU:    resource.MustParse(r.CPURequest),
+			corev1.ResourceMemory: resource.MustParse(r.MemRequest),
 		}).
 		WithLimits(corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(containerCPULim),
-			corev1.ResourceMemory: resource.MustParse(containerMemLim),
+			corev1.ResourceCPU:    resource.MustParse(r.CPULimit),
+			corev1.ResourceMemory: resource.MustParse(r.MemLimit),
 		})
 }

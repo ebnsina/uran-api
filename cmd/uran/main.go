@@ -23,6 +23,8 @@ func main() {
 		"env":      cmdEnv,
 		"domain":   cmdDomain,
 		"db":       cmdDB,
+		"scale":    cmdScale,
+		"health":   cmdHealth,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -56,5 +58,7 @@ Usage:
   uran db list       --project ID
   uran db connection --database ID
   uran db rm         --database ID
+  uran scale  --service ID [--replicas N] [--size small|medium|large] [--min N --max N]
+  uran health --service ID --path /healthz
 `)
 }

@@ -21,15 +21,23 @@ import (
 
 // ServiceSpec is the desired state for one service's workload.
 type ServiceSpec struct {
-	Namespace string            // target namespace (created if absent)
-	Name      string            // DNS-1123 workload name (service slug)
-	Type      string            // svctype.{Web,Static,Worker,Cron}
-	Image     string            // image reference to run
-	Port      int32             // port the container listens on (exposed as PORT env)
-	Schedule  string            // cron expression (cron type only)
-	Env       map[string]string // user-defined environment variables
-	Domains   []string          // additional custom hostnames routed to this workload
+	Namespace    string            // target namespace (created if absent)
+	Name         string            // DNS-1123 workload name (service slug)
+	Type         string            // svctype.{Web,Static,Worker,Cron}
+	Image        string            // image reference to run
+	Port         int32             // port the container listens on (exposed as PORT env)
+	Schedule     string            // cron expression (cron type only)
+	Env          map[string]string // user-defined environment variables
+	Domains      []string          // additional custom hostnames routed to this workload
+	Replicas     int32             // fixed replica count (used when not autoscaling)
+	InstanceSize string            // instance.* size name
+	HealthPath   string            // HTTP health-check path; empty means a TCP check
+	MinReplicas  int32             // autoscale floor (autoscaling on when MaxReplicas > 0)
+	MaxReplicas  int32             // autoscale ceiling
 }
+
+// autoscaled reports whether the spec uses an HPA rather than a fixed count.
+func (s ServiceSpec) autoscaled() bool { return s.MaxReplicas > 0 }
 
 // envSecretName is the Secret that holds a service's environment variables.
 func envSecretName(name string) string { return name + "-env" }
@@ -81,8 +89,11 @@ func (r *Reconciler) Apply(ctx context.Context, spec ServiceSpec) error {
 		return r.applyCronJob(ctx, spec)
 	}
 
-	// All other types run a Deployment.
+	// All other types run a Deployment, optionally autoscaled.
 	if err := r.applyDeployment(ctx, spec); err != nil {
+		return err
+	}
+	if err := r.reconcileAutoscaler(ctx, spec); err != nil {
 		return err
 	}
 
@@ -127,32 +138,53 @@ func (r *Reconciler) applyEnvSecret(ctx context.Context, spec ServiceSpec) error
 
 func (r *Reconciler) applyDeployment(ctx context.Context, spec ServiceSpec) error {
 	labels := selectorLabels(spec.Name)
-	ac := appsac.Deployment(spec.Name, spec.Namespace).
-		WithLabels(labels).
-		WithSpec(appsac.DeploymentSpec().
-			WithReplicas(1).
-			WithSelector(metaac.LabelSelector().WithMatchLabels(labels)).
-			WithTemplate(coreac.PodTemplateSpec().
-				WithLabels(labels).
-				WithSpec(coreac.PodSpec().
-					WithContainers(coreac.Container().
-						WithName("app").
-						WithImage(spec.Image).
-						WithPorts(coreac.ContainerPort().WithContainerPort(spec.Port)).
-						WithResources(containerResources()).
-						WithEnv(coreac.EnvVar().WithName("PORT").WithValue(fmt.Sprintf("%d", spec.Port))).
-						WithEnvFrom(coreac.EnvFromSource().WithSecretRef(
-							coreac.SecretEnvSource().WithName(envSecretName(spec.Name)),
-						)),
-					),
-				),
-			),
+
+	container := coreac.Container().
+		WithName("app").
+		WithImage(spec.Image).
+		WithPorts(coreac.ContainerPort().WithContainerPort(spec.Port)).
+		WithResources(containerResources(spec.InstanceSize)).
+		WithEnv(coreac.EnvVar().WithName("PORT").WithValue(fmt.Sprintf("%d", spec.Port))).
+		WithEnvFrom(coreac.EnvFromSource().WithSecretRef(
+			coreac.SecretEnvSource().WithName(envSecretName(spec.Name)),
+		))
+	// Routable workloads get readiness + liveness probes so rollouts wait for
+	// health and unhealthy pods are restarted. Background workers are skipped
+	// (they have no HTTP/known port contract).
+	if svctype.IsRoutable(spec.Type) {
+		probe := healthProbe(spec)
+		container = container.WithReadinessProbe(probe).WithLivenessProbe(probe)
+	}
+
+	depSpec := appsac.DeploymentSpec().
+		WithSelector(metaac.LabelSelector().WithMatchLabels(labels)).
+		WithTemplate(coreac.PodTemplateSpec().
+			WithLabels(labels).
+			WithSpec(coreac.PodSpec().WithContainers(container)),
 		)
-	_, err := r.kube.AppsV1().Deployments(spec.Namespace).Apply(ctx, ac, applyOpts())
-	if err != nil {
+	// When autoscaling, the HPA owns the replica count — don't fight it.
+	if !spec.autoscaled() {
+		depSpec = depSpec.WithReplicas(spec.Replicas)
+	}
+
+	ac := appsac.Deployment(spec.Name, spec.Namespace).WithLabels(labels).WithSpec(depSpec)
+	if _, err := r.kube.AppsV1().Deployments(spec.Namespace).Apply(ctx, ac, applyOpts()); err != nil {
 		return fmt.Errorf("apply deployment %s: %w", spec.Name, err)
 	}
 	return nil
+}
+
+// healthProbe builds the readiness/liveness probe for a spec: an HTTP GET when
+// a health path is configured, otherwise a TCP connect to the port.
+func healthProbe(spec ServiceSpec) *coreac.ProbeApplyConfiguration {
+	if spec.HealthPath != "" {
+		return coreac.Probe().WithHTTPGet(
+			coreac.HTTPGetAction().WithPath(spec.HealthPath).WithPort(intstr.FromInt32(spec.Port)),
+		)
+	}
+	return coreac.Probe().WithTCPSocket(
+		coreac.TCPSocketAction().WithPort(intstr.FromInt32(spec.Port)),
+	)
 }
 
 func (r *Reconciler) applyService(ctx context.Context, spec ServiceSpec) error {
@@ -280,6 +312,9 @@ func (r *Reconciler) Delete(ctx context.Context, namespace, name string) error {
 	}
 	if err := r.kube.BatchV1().CronJobs(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
 		return fmt.Errorf("delete cronjob %s: %w", name, err)
+	}
+	if err := r.deleteAutoscaler(ctx, namespace, name); err != nil {
+		return err
 	}
 	if err := r.kube.CoreV1().Services(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
 		return fmt.Errorf("delete service %s: %w", name, err)

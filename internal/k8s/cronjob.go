@@ -27,7 +27,7 @@ func (r *Reconciler) applyCronJob(ctx context.Context, spec ServiceSpec) error {
 							WithContainers(coreac.Container().
 								WithName("app").
 								WithImage(spec.Image).
-								WithResources(containerResources()).
+								WithResources(containerResources(spec.InstanceSize)).
 								WithEnvFrom(coreac.EnvFromSource().WithSecretRef(
 									coreac.SecretEnvSource().WithName(envSecretName(spec.Name)),
 								)),
