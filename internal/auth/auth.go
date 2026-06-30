@@ -5,6 +5,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
 	"strings"
@@ -14,6 +15,24 @@ import (
 
 	"github.com/ebnsina/uran-api/internal/store"
 )
+
+// APITokenPrefix identifies personal access tokens (vs session tokens).
+const APITokenPrefix = "uran_pat_"
+
+// NewAPIToken returns a new personal access token string.
+func NewAPIToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return APITokenPrefix + hex.EncodeToString(b), nil
+}
+
+// HashAPIToken returns the SHA-256 hex digest stored for a token.
+func HashAPIToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
 
 type ctxKey int
 
@@ -53,8 +72,8 @@ func New(s *store.Store, ttl time.Duration) *Authenticator {
 // TTL is the session lifetime.
 func (a *Authenticator) TTL() time.Duration { return a.ttl }
 
-// Middleware rejects requests without a valid bearer token and injects the
-// authenticated user into the request context.
+// Middleware rejects requests without a valid bearer token (session or API
+// token) and injects the authenticated user into the request context.
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := bearerToken(r)
@@ -62,7 +81,7 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		u, err := a.store.UserBySession(r.Context(), token)
+		u, err := a.resolve(r.Context(), token)
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -70,6 +89,19 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), userKey, u)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// resolve authenticates a bearer token as either an API token or a session.
+func (a *Authenticator) resolve(ctx context.Context, token string) (store.User, error) {
+	if strings.HasPrefix(token, APITokenPrefix) {
+		hash := HashAPIToken(token)
+		u, err := a.store.UserByAPIToken(ctx, hash)
+		if err == nil {
+			a.store.TouchAPIToken(ctx, hash)
+		}
+		return u, err
+	}
+	return a.store.UserBySession(ctx, token)
 }
 
 // UserFrom returns the authenticated user from the context, if present.

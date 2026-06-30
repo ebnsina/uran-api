@@ -27,6 +27,7 @@ func main() {
 		"health":   cmdHealth,
 		"disk":     cmdDisk,
 		"metrics":  cmdMetrics,
+		"token":    cmdToken,
 	}
 
 	cmd, ok := commands[os.Args[1]]
@@ -44,7 +45,10 @@ func usage() {
 	fmt.Fprint(os.Stderr, `uran — control plane CLI
 
 Usage:
-  uran login    --api URL --email EMAIL --password PASSWORD
+  uran login    --api URL --email EMAIL --password PASSWORD   (or --token PAT)
+  uran token create --name NAME
+  uran token list
+  uran token rm  --id ID
   uran whoami
   uran deploy   --service ID [--commit SHA | --image REF]
   uran status   --deploy ID

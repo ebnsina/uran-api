@@ -29,6 +29,7 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   on CPU (HPA), with readiness/liveness health checks gating rollouts.
 - **Persistent disks** — attach a volume to a service for stateful workloads;
   data survives restarts and redeploys.
+- **API tokens** — issue personal access tokens for CI and programmatic access.
 - **Observability** — stream live runtime logs and read per-pod CPU/memory.
 - **Instant rollback** — redeploy any previous image without rebuilding.
 - **CLI** — drive the whole flow from the terminal with `uran`.
@@ -70,6 +71,8 @@ go run ./cmd/controller   # kubernetes reconciler
 go build -o uran ./cmd/uran
 
 uran login    --api http://localhost:8080 --email you@example.com --password ****
+uran login    --api http://localhost:8080 --token uran_pat_…    # CI / token auth
+uran token create --name ci               # issue a personal access token
 uran deploy   --service 3                 # build + deploy from the service's repo
 uran deploy   --service 3 --image registry/app:1.2.3   # deploy a prebuilt image
 uran logs     --deploy 6                  # stream build logs
@@ -97,6 +100,8 @@ uran metrics --service 3                  # per-pod CPU/memory
 | POST | `/v1/auth/login` | – | Authenticate → `{token,user}` |
 | POST | `/v1/auth/logout` | bearer | Revoke session |
 | GET  | `/v1/me` | bearer | Current user |
+| GET/POST | `/v1/tokens` | bearer | List / create API tokens |
+| DELETE | `/v1/tokens/{tokenID}` | bearer | Revoke an API token |
 | GET/POST | `/v1/orgs` | bearer | List / create orgs |
 | GET/POST | `/v1/orgs/{orgID}/projects` | bearer | List / create projects |
 | GET/POST | `/v1/projects/{projectID}/services` | bearer | List / create services |
@@ -119,7 +124,8 @@ uran metrics --service 3                  # per-pod CPU/memory
 | POST/DELETE | `/v1/services/{serviceID}/disk` | bearer | Attach / detach a persistent disk |
 | POST | `/v1/webhooks/github` | HMAC | GitHub push / pull_request events |
 
-Authenticated requests send `Authorization: Bearer <token>`. The webhook is
+Authenticated requests send `Authorization: Bearer <token>` — either a session
+token or a personal access token (`uran_pat_…`). The webhook is
 verified via `X-Hub-Signature-256` against `URAN_GITHUB_WEBHOOK_SECRET`.
 
 ## Development

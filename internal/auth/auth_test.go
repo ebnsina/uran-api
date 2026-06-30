@@ -15,6 +15,24 @@ func TestHashAndCheckPassword(t *testing.T) {
 	}
 }
 
+func TestAPIToken(t *testing.T) {
+	tok, err := NewAPIToken()
+	if err != nil {
+		t.Fatalf("NewAPIToken: %v", err)
+	}
+	if len(tok) <= len(APITokenPrefix) || tok[:len(APITokenPrefix)] != APITokenPrefix {
+		t.Errorf("token %q missing prefix", tok)
+	}
+	// Hash is deterministic and stable in length (sha256 hex = 64 chars).
+	h1, h2 := HashAPIToken(tok), HashAPIToken(tok)
+	if h1 != h2 || len(h1) != 64 {
+		t.Errorf("hash unstable or wrong length: %q", h1)
+	}
+	if HashAPIToken("other") == h1 {
+		t.Error("different tokens must hash differently")
+	}
+}
+
 func TestNewTokenUnique(t *testing.T) {
 	a, err := NewToken()
 	if err != nil {

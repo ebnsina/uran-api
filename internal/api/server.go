@@ -51,6 +51,10 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/auth/logout", s.handleLogout)
 		r.Get("/v1/me", s.handleMe)
 
+		r.Get("/v1/tokens", s.handleListTokens)
+		r.Post("/v1/tokens", s.handleCreateToken)
+		r.Delete("/v1/tokens/{tokenID}", s.handleDeleteToken)
+
 		r.Get("/v1/orgs", s.handleListOrgs)
 		r.Post("/v1/orgs", s.handleCreateOrg)
 
