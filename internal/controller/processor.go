@@ -207,7 +207,7 @@ func (p *Processor) reconcileDatabase(ctx context.Context, dbID int64) {
 func (p *Processor) provisionEngine(ctx context.Context, db store.Database, namespace, cluster string) (string, string, error) {
 	switch db.Engine {
 	case "redis":
-		if err := p.recon.ProvisionRedis(ctx, namespace, cluster); err != nil {
+		if err := p.recon.ProvisionRedis(ctx, namespace, cluster, db.Storage); err != nil {
 			return "", "", err
 		}
 		if err := p.recon.WaitRedisReady(ctx, namespace, cluster); err != nil {
