@@ -100,8 +100,10 @@ func (p *Processor) reconcile(ctx context.Context, deployID int64) {
 	spec := k8s.ServiceSpec{
 		Namespace: naming.NamespaceForOrg(orgID),
 		Name:      naming.WorkloadName(svc.Slug, d.Kind, d.PRNumber),
+		Type:      svc.Type,
 		Image:     d.Image,
 		Port:      servicePort,
+		Schedule:  svc.Schedule,
 		Env:       envMap(envVars),
 		Domains:   domains,
 	}

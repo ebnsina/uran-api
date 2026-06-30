@@ -15,14 +15,18 @@ import (
 	appsac "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreac "k8s.io/client-go/applyconfigurations/core/v1"
 	metaac "k8s.io/client-go/applyconfigurations/meta/v1"
+
+	"github.com/ebnsina/uran-api/internal/svctype"
 )
 
 // ServiceSpec is the desired state for one service's workload.
 type ServiceSpec struct {
 	Namespace string            // target namespace (created if absent)
 	Name      string            // DNS-1123 workload name (service slug)
+	Type      string            // svctype.{Web,Static,Worker,Cron}
 	Image     string            // image reference to run
 	Port      int32             // port the container listens on (exposed as PORT env)
+	Schedule  string            // cron expression (cron type only)
 	Env       map[string]string // user-defined environment variables
 	Domains   []string          // additional custom hostnames routed to this workload
 }
@@ -71,17 +75,29 @@ func (r *Reconciler) Apply(ctx context.Context, spec ServiceSpec) error {
 	if err := r.applyEnvSecret(ctx, spec); err != nil {
 		return err
 	}
-	if err := r.applyCertificate(ctx, spec); err != nil {
-		return err
+
+	// Cron services are a scheduled CronJob, not a long-running workload.
+	if spec.Type == svctype.Cron {
+		return r.applyCronJob(ctx, spec)
 	}
+
+	// All other types run a Deployment.
 	if err := r.applyDeployment(ctx, spec); err != nil {
 		return err
 	}
-	if err := r.applyService(ctx, spec); err != nil {
-		return err
-	}
-	if err := r.applyIngressRoute(ctx, spec); err != nil {
-		return err
+
+	// Only routable types (web/static) get a Service, route, and TLS cert;
+	// background workers run without inbound networking.
+	if svctype.IsRoutable(spec.Type) {
+		if err := r.applyCertificate(ctx, spec); err != nil {
+			return err
+		}
+		if err := r.applyService(ctx, spec); err != nil {
+			return err
+		}
+		if err := r.applyIngressRoute(ctx, spec); err != nil {
+			return err
+		}
 	}
 	return r.waitForRollout(ctx, spec.Namespace, spec.Name)
 }
@@ -261,6 +277,9 @@ func (r *Reconciler) Delete(ctx context.Context, namespace, name string) error {
 
 	if err := r.kube.AppsV1().Deployments(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
 		return fmt.Errorf("delete deployment %s: %w", name, err)
+	}
+	if err := r.kube.BatchV1().CronJobs(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
+		return fmt.Errorf("delete cronjob %s: %w", name, err)
 	}
 	if err := r.kube.CoreV1().Services(namespace).Delete(ctx, name, delOpts); ignoreNotFound(err) != nil {
 		return fmt.Errorf("delete service %s: %w", name, err)

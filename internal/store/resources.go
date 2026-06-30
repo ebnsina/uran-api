@@ -111,23 +111,29 @@ func (s *Store) ListProjects(ctx context.Context, orgID int64) ([]Project, error
 	return out, rows.Err()
 }
 
-// CreateService inserts a service under a project.
-func (s *Store) CreateService(ctx context.Context, projectID int64, name, slug, typ, repoURL, branch string) (Service, error) {
+// serviceCols is the canonical column list for selecting a service.
+const serviceCols = `id, project_id, name, slug, type, repo_url, branch, schedule, created_at`
+
+func scanService(sc scanner) (Service, error) {
 	var svc Service
-	err := s.pool.QueryRow(ctx,
-		`INSERT INTO services (project_id, name, slug, type, repo_url, branch)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, project_id, name, slug, type, repo_url, branch, created_at`,
-		projectID, name, slug, typ, repoURL, branch,
-	).Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.CreatedAt)
+	err := sc.Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.Schedule, &svc.CreatedAt)
 	return svc, err
+}
+
+// CreateService inserts a service under a project.
+func (s *Store) CreateService(ctx context.Context, projectID int64, name, slug, typ, repoURL, branch, schedule string) (Service, error) {
+	return scanService(s.pool.QueryRow(ctx,
+		`INSERT INTO services (project_id, name, slug, type, repo_url, branch, schedule)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING `+serviceCols,
+		projectID, name, slug, typ, repoURL, branch, schedule,
+	))
 }
 
 // ListServices returns services for a project.
 func (s *Store) ListServices(ctx context.Context, projectID int64) ([]Service, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, project_id, name, slug, type, repo_url, branch, created_at
-		 FROM services WHERE project_id = $1 ORDER BY id`,
+		`SELECT `+serviceCols+` FROM services WHERE project_id = $1 ORDER BY id`,
 		projectID,
 	)
 	if err != nil {
@@ -136,8 +142,8 @@ func (s *Store) ListServices(ctx context.Context, projectID int64) ([]Service, e
 	defer rows.Close()
 	var out []Service
 	for rows.Next() {
-		var svc Service
-		if err := rows.Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.CreatedAt); err != nil {
+		svc, err := scanService(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, svc)

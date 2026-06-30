@@ -158,8 +158,7 @@ func (s *Store) SetDeployImage(ctx context.Context, id int64, image string) erro
 // ".git" suffix so both clone and html URLs resolve.
 func (s *Store) ServicesByRepo(ctx context.Context, repoURL, branch string) ([]Service, error) {
 	return s.queryServices(ctx,
-		`SELECT id, project_id, name, slug, type, repo_url, branch, created_at
-		 FROM services
+		`SELECT `+serviceCols+` FROM services
 		 WHERE branch = $2
 		   AND lower(trim(trailing '.git' from repo_url)) = lower(trim(trailing '.git' from $1))`,
 		repoURL, branch,
@@ -170,8 +169,7 @@ func (s *Store) ServicesByRepo(ctx context.Context, repoURL, branch string) ([]S
 // to fan a pull request out to every service of that repo.
 func (s *Store) ServicesByRepoURL(ctx context.Context, repoURL string) ([]Service, error) {
 	return s.queryServices(ctx,
-		`SELECT id, project_id, name, slug, type, repo_url, branch, created_at
-		 FROM services
+		`SELECT `+serviceCols+` FROM services
 		 WHERE lower(trim(trailing '.git' from repo_url)) = lower(trim(trailing '.git' from $1))`,
 		repoURL,
 	)
@@ -185,8 +183,8 @@ func (s *Store) queryServices(ctx context.Context, sql string, args ...any) ([]S
 	defer rows.Close()
 	var out []Service
 	for rows.Next() {
-		var svc Service
-		if err := rows.Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.CreatedAt); err != nil {
+		svc, err := scanService(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, svc)
@@ -200,11 +198,11 @@ func (s *Store) ServiceByID(ctx context.Context, id int64) (Service, int64, erro
 	var svc Service
 	var orgID int64
 	err := s.pool.QueryRow(ctx,
-		`SELECT s.id, s.project_id, s.name, s.slug, s.type, s.repo_url, s.branch, s.created_at, p.org_id
+		`SELECT s.id, s.project_id, s.name, s.slug, s.type, s.repo_url, s.branch, s.schedule, s.created_at, p.org_id
 		 FROM services s JOIN projects p ON p.id = s.project_id
 		 WHERE s.id = $1`,
 		id,
-	).Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.CreatedAt, &orgID)
+	).Scan(&svc.ID, &svc.ProjectID, &svc.Name, &svc.Slug, &svc.Type, &svc.RepoURL, &svc.Branch, &svc.Schedule, &svc.CreatedAt, &orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return svc, 0, ErrNotFound
 	}

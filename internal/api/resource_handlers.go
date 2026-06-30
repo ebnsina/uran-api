@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ebnsina/uran-api/internal/auth"
+	"github.com/ebnsina/uran-api/internal/svctype"
 )
 
 // slugify produces a lowercase, dash-separated slug from a name.
@@ -146,10 +147,11 @@ func (s *Server) requireProjectAccess(w http.ResponseWriter, r *http.Request) (i
 }
 
 type createServiceReq struct {
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	RepoURL string `json:"repo_url"`
-	Branch  string `json:"branch"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	RepoURL  string `json:"repo_url"`
+	Branch   string `json:"branch"`
+	Schedule string `json:"schedule"`
 }
 
 func (s *Server) handleCreateService(w http.ResponseWriter, r *http.Request) {
@@ -164,13 +166,21 @@ func (s *Server) handleCreateService(w http.ResponseWriter, r *http.Request) {
 	}
 	typ := req.Type
 	if typ == "" {
-		typ = "web"
+		typ = svctype.Web
+	}
+	if !svctype.IsValid(typ) {
+		writeError(w, http.StatusBadRequest, "invalid service type")
+		return
+	}
+	if svctype.RequiresSchedule(typ) && strings.TrimSpace(req.Schedule) == "" {
+		writeError(w, http.StatusBadRequest, "cron services require a schedule")
+		return
 	}
 	branch := req.Branch
 	if branch == "" {
 		branch = "main"
 	}
-	svc, err := s.store.CreateService(r.Context(), projectID, req.Name, slugify(req.Name), typ, req.RepoURL, branch)
+	svc, err := s.store.CreateService(r.Context(), projectID, req.Name, slugify(req.Name), typ, req.RepoURL, branch, req.Schedule)
 	if err != nil {
 		writeError(w, http.StatusConflict, "could not create service (slug may be taken)")
 		return
