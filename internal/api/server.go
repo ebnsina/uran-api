@@ -60,6 +60,10 @@ func (s *Server) Router() http.Handler {
 		r.Get("/v1/orgs", s.handleListOrgs)
 		r.Post("/v1/orgs", s.handleCreateOrg)
 
+		r.Get("/v1/orgs/{orgID}/registry-credentials", s.handleListRegistryCreds)
+		r.Post("/v1/orgs/{orgID}/registry-credentials", s.handleAddRegistryCred)
+		r.Delete("/v1/orgs/{orgID}/registry-credentials/{credID}", s.handleDeleteRegistryCred)
+
 		r.Get("/v1/orgs/{orgID}/members", s.handleListMembers)
 		r.Post("/v1/orgs/{orgID}/members", s.handleAddMember)
 		r.Patch("/v1/orgs/{orgID}/members/{userID}", s.handleSetMemberRole)

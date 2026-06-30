@@ -130,6 +130,7 @@ func (p *Processor) reconcile(ctx context.Context, deployID int64) {
 		MaxReplicas:  svc.MaxReplicas,
 		DiskSize:     svc.DiskSize,
 		DiskPath:     svc.DiskPath,
+		PullCreds:    p.pullCreds(ctx, orgID),
 	}
 	if err := p.recon.Apply(ctx, spec); err != nil {
 		log.Error("reconcile failed", "err", err)
@@ -265,6 +266,19 @@ func parseTeardown(payload string) (serviceID int64, prNumber int, err error) {
 		return 0, 0, err
 	}
 	return serviceID, prNumber, nil
+}
+
+// pullCreds returns the org's registry credentials as k8s pull creds.
+func (p *Processor) pullCreds(ctx context.Context, orgID int64) []k8s.RegistryCred {
+	creds, err := p.store.ListRegistryCredentials(ctx, orgID)
+	if err != nil {
+		return nil
+	}
+	out := make([]k8s.RegistryCred, len(creds))
+	for i, c := range creds {
+		out[i] = k8s.RegistryCred{Registry: c.Registry, Username: c.Username, Password: c.Password}
+	}
+	return out
 }
 
 // domainNames returns the custom domain hostnames attached to a service.

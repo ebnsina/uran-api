@@ -9,7 +9,7 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 
 - **Git-driven deploys** — connect a repo; pushes build and ship automatically.
 - **Deploy from an image** — ship a prebuilt container image directly (CI push),
-  skipping the build.
+  skipping the build; configure private-registry credentials per org.
 - **Multiple service types** — HTTP web services, static sites, background
   workers (no inbound routing), and scheduled cron jobs.
 - **Managed databases** — provision Postgres (CloudNativePG) or Redis per
@@ -112,6 +112,8 @@ uran metrics --service 3                  # per-pod CPU/memory
 | GET/POST | `/v1/tokens` | bearer | List / create API tokens |
 | DELETE | `/v1/tokens/{tokenID}` | bearer | Revoke an API token |
 | GET/POST | `/v1/orgs` | bearer | List / create orgs |
+| GET/POST | `/v1/orgs/{orgID}/registry-credentials` | bearer | List / add private-registry creds (admin+) |
+| DELETE | `/v1/orgs/{orgID}/registry-credentials/{credID}` | bearer | Remove a credential (admin+) |
 | GET/POST | `/v1/orgs/{orgID}/members` | bearer | List / add members (add: admin+) |
 | PATCH/DELETE | `/v1/orgs/{orgID}/members/{userID}` | bearer | Set role / remove (admin+) |
 | GET/POST | `/v1/orgs/{orgID}/projects` | bearer | List / create projects |

@@ -14,6 +14,19 @@ import (
 // but has no Service or route.
 func (r *Reconciler) applyCronJob(ctx context.Context, spec ServiceSpec) error {
 	labels := selectorLabels(spec.Name)
+	pod := coreac.PodSpec().
+		WithRestartPolicy(corev1.RestartPolicyOnFailure).
+		WithContainers(coreac.Container().
+			WithName("app").
+			WithImage(spec.Image).
+			WithResources(containerResources(spec.InstanceSize)).
+			WithEnvFrom(coreac.EnvFromSource().WithSecretRef(
+				coreac.SecretEnvSource().WithName(envSecretName(spec.Name)),
+			)),
+		)
+	if len(spec.PullCreds) > 0 {
+		pod = pod.WithImagePullSecrets(coreac.LocalObjectReference().WithName(pullSecretName))
+	}
 	ac := batchac.CronJob(spec.Name, spec.Namespace).
 		WithLabels(labels).
 		WithSpec(batchac.CronJobSpec().
@@ -22,17 +35,7 @@ func (r *Reconciler) applyCronJob(ctx context.Context, spec ServiceSpec) error {
 				WithSpec(batchac.JobSpec().
 					WithTemplate(coreac.PodTemplateSpec().
 						WithLabels(labels).
-						WithSpec(coreac.PodSpec().
-							WithRestartPolicy(corev1.RestartPolicyOnFailure).
-							WithContainers(coreac.Container().
-								WithName("app").
-								WithImage(spec.Image).
-								WithResources(containerResources(spec.InstanceSize)).
-								WithEnvFrom(coreac.EnvFromSource().WithSecretRef(
-									coreac.SecretEnvSource().WithName(envSecretName(spec.Name)),
-								)),
-							),
-						),
+						WithSpec(pod),
 					),
 				),
 			),
