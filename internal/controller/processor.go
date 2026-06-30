@@ -79,9 +79,37 @@ func (p *Processor) Run(ctx context.Context) error {
 			go p.teardownDatabase(ctx, payload)
 		})
 	})
+	g.Go(func() error {
+		p.log.Info("controller listening for database backups", "channel", store.DatabaseBackupChannel)
+		return p.store.Listen(ctx, store.DatabaseBackupChannel, func(payload string) {
+			id, err := strconv.ParseInt(payload, 10, 64)
+			if err != nil {
+				p.log.Warn("bad backup notification", "payload", payload)
+				return
+			}
+			go p.backupDatabase(ctx, id)
+		})
+	})
 	g.Go(func() error { return p.runDBAutoscaler(ctx) })
 	g.Go(func() error { return p.runUsageSampler(ctx) })
 	return g.Wait()
+}
+
+// backupDatabase triggers an on-demand backup for a database.
+func (p *Processor) backupDatabase(ctx context.Context, dbID int64) {
+	db, orgID, err := p.store.DatabaseByID(ctx, dbID)
+	if err != nil {
+		p.log.Error("backup: load database", "database_id", dbID, "err", err)
+		return
+	}
+	namespace := naming.NamespaceForOrg(orgID)
+	cluster := naming.DatabaseCluster(db.Slug)
+	name := fmt.Sprintf("%s-ondemand-%d", cluster, time.Now().Unix())
+	if err := p.recon.TriggerBackup(ctx, namespace, cluster, name); err != nil {
+		p.log.Error("backup: trigger", "database_id", dbID, "err", err)
+		return
+	}
+	p.log.Info("backup triggered", "database_id", dbID, "backup", name)
 }
 
 // reconcile applies a deploy's workload to the cluster and records the outcome.
@@ -228,7 +256,7 @@ func (p *Processor) provisionEngine(ctx context.Context, db store.Database, name
 		}
 		return p.recon.RedisConnectionURI(namespace, cluster), "", nil
 	default: // postgres
-		spec := k8s.PostgresSpec{Instances: db.Instances, Size: db.Size, Storage: db.Storage}
+		spec := k8s.PostgresSpec{Instances: db.Instances, Size: db.Size, Storage: db.Storage, Backups: db.Backups}
 		if err := p.recon.ProvisionPostgres(ctx, namespace, cluster, spec); err != nil {
 			return "", "", err
 		}

@@ -31,7 +31,7 @@ func (s *Server) handleScale(w http.ResponseWriter, r *http.Request) {
 		req.InstanceSize = svc.InstanceSize
 	}
 	if !instance.IsValid(req.InstanceSize) {
-		writeError(w, http.StatusBadRequest, "invalid instance_size (small|medium|large)")
+		writeError(w, http.StatusBadRequest, "invalid instance_size (small|medium|large|xlarge|2xlarge)")
 		return
 	}
 	if req.Replicas < 1 {

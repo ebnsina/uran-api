@@ -3,11 +3,14 @@
 // controller (resource construction) so they never drift.
 package instance
 
-// Size names.
+// Size names. small–large are general-purpose; xlarge and 2xlarge are the
+// "pro compute" tier for CPU/memory-heavy workloads.
 const (
-	Small  = "small"
-	Medium = "medium"
-	Large  = "large"
+	Small   = "small"
+	Medium  = "medium"
+	Large   = "large"
+	XLarge  = "xlarge"
+	XXLarge = "2xlarge"
 )
 
 // Resources holds the Kubernetes resource quantities for a size.
@@ -19,9 +22,11 @@ type Resources struct {
 }
 
 var sizes = map[string]Resources{
-	Small:  {CPURequest: "50m", MemRequest: "64Mi", CPULimit: "250m", MemLimit: "256Mi"},
-	Medium: {CPURequest: "250m", MemRequest: "256Mi", CPULimit: "1", MemLimit: "512Mi"},
-	Large:  {CPURequest: "500m", MemRequest: "512Mi", CPULimit: "2", MemLimit: "1Gi"},
+	Small:   {CPURequest: "50m", MemRequest: "64Mi", CPULimit: "250m", MemLimit: "256Mi"},
+	Medium:  {CPURequest: "250m", MemRequest: "256Mi", CPULimit: "1", MemLimit: "512Mi"},
+	Large:   {CPURequest: "500m", MemRequest: "512Mi", CPULimit: "2", MemLimit: "1Gi"},
+	XLarge:  {CPURequest: "1", MemRequest: "1Gi", CPULimit: "4", MemLimit: "4Gi"},
+	XXLarge: {CPURequest: "2", MemRequest: "2Gi", CPULimit: "8", MemLimit: "8Gi"},
 }
 
 // IsValid reports whether s is a known instance size.

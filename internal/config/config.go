@@ -34,11 +34,15 @@ type BuilderConfig struct {
 
 // ControllerConfig is the configuration for the k8s reconciler.
 type ControllerConfig struct {
-	DatabaseURL string // URAN_DATABASE_URL
-	Env         string // URAN_ENV
-	Kubeconfig  string // URAN_KUBECONFIG
-	BaseDomain  string // URAN_BASE_DOMAIN
-	CertIssuer  string // URAN_CERT_ISSUER — cert-manager ClusterIssuer name
+	DatabaseURL     string // URAN_DATABASE_URL
+	Env             string // URAN_ENV
+	Kubeconfig      string // URAN_KUBECONFIG
+	BaseDomain      string // URAN_BASE_DOMAIN
+	CertIssuer      string // URAN_CERT_ISSUER — cert-manager ClusterIssuer name
+	BackupEndpoint  string // URAN_BACKUP_ENDPOINT — S3-compatible endpoint URL
+	BackupBucket    string // URAN_BACKUP_BUCKET
+	BackupAccessKey string // URAN_BACKUP_ACCESS_KEY
+	BackupSecretKey string // URAN_BACKUP_SECRET_KEY
 }
 
 // LoadAPI loads and validates the API server configuration.
@@ -74,9 +78,13 @@ func LoadController() (ControllerConfig, error) {
 	cfg := ControllerConfig{
 		DatabaseURL: l.str("URAN_DATABASE_URL"),
 		Env:         l.str("URAN_ENV"),
-		Kubeconfig:  l.str("URAN_KUBECONFIG"),
-		BaseDomain:  l.str("URAN_BASE_DOMAIN"),
-		CertIssuer:  l.str("URAN_CERT_ISSUER"),
+		Kubeconfig:      l.str("URAN_KUBECONFIG"),
+		BaseDomain:      l.str("URAN_BASE_DOMAIN"),
+		CertIssuer:      l.str("URAN_CERT_ISSUER"),
+		BackupEndpoint:  l.str("URAN_BACKUP_ENDPOINT"),
+		BackupBucket:    l.str("URAN_BACKUP_BUCKET"),
+		BackupAccessKey: l.str("URAN_BACKUP_ACCESS_KEY"),
+		BackupSecretKey: l.str("URAN_BACKUP_SECRET_KEY"),
 	}
 	return cfg, l.err()
 }
