@@ -65,10 +65,22 @@ func (s *Store) createBuildableDeploy(ctx context.Context, serviceID int64, comm
 }
 
 // CreateRollbackDeploy creates a new deploy that reuses an already-built image,
-// skipping the build stage by inserting it directly in the "deploying" state
-// (with a synthetic succeeded build for log/history symmetry). The controller
-// picks it up and reconciles it onto the cluster.
+// skipping the build stage. The controller reconciles it onto the cluster.
 func (s *Store) CreateRollbackDeploy(ctx context.Context, serviceID int64, image, commitSHA string, fromDeployID int64) (Deploy, error) {
+	return s.createImagedDeploy(ctx, serviceID, image, commitSHA,
+		fmt.Sprintf("rolled back: reused image %s from deploy %d\n", image, fromDeployID))
+}
+
+// CreateImageDeploy deploys a prebuilt container image directly (e.g. pushed by
+// CI), skipping the Git build entirely.
+func (s *Store) CreateImageDeploy(ctx context.Context, serviceID int64, image string) (Deploy, error) {
+	return s.createImagedDeploy(ctx, serviceID, image, "",
+		fmt.Sprintf("deployed prebuilt image %s\n", image))
+}
+
+// createImagedDeploy inserts a deploy directly in the "deploying" state with a
+// synthetic succeeded build (for log/history symmetry), in one transaction.
+func (s *Store) createImagedDeploy(ctx context.Context, serviceID int64, image, commitSHA, buildLog string) (Deploy, error) {
 	var d Deploy
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -88,8 +100,7 @@ func (s *Store) CreateRollbackDeploy(ctx context.Context, serviceID int64, image
 	if _, err = tx.Exec(ctx,
 		`INSERT INTO builds (deploy_id, status, logs, started_at, ended_at)
 		 VALUES ($1, $2, $3, now(), now())`,
-		d.ID, deploy.BuildSucceeded,
-		fmt.Sprintf("rolled back: reused image %s from deploy %d\n", image, fromDeployID),
+		d.ID, deploy.BuildSucceeded, buildLog,
 	); err != nil {
 		return d, err
 	}

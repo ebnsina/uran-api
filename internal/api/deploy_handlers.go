@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -50,6 +51,33 @@ func (s *Server) handleCreateDeploy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not create deploy")
 		return
+	}
+	writeJSON(w, http.StatusCreated, d)
+}
+
+type imageDeployReq struct {
+	Image string `json:"image"`
+}
+
+// handleImageDeploy deploys a prebuilt container image to a service, skipping
+// the Git build (CI push-to-deploy).
+func (s *Server) handleImageDeploy(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.requireServiceAccess(w, r)
+	if !ok {
+		return
+	}
+	var req imageDeployReq
+	if err := readJSON(r, &req); err != nil || strings.TrimSpace(req.Image) == "" {
+		writeError(w, http.StatusBadRequest, "image required")
+		return
+	}
+	d, err := s.store.CreateImageDeploy(r.Context(), svc.ID, strings.TrimSpace(req.Image))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not create deploy")
+		return
+	}
+	if err := s.store.Notify(r.Context(), store.DeploymentChannel, strconv.FormatInt(d.ID, 10)); err != nil {
+		s.log.Warn("notify image deploy failed", "deploy_id", d.ID, "err", err)
 	}
 	writeJSON(w, http.StatusCreated, d)
 }
