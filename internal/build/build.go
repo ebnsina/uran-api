@@ -16,6 +16,7 @@ type Request struct {
 	RepoURL string // Git URL or local path to clone
 	Ref     string // commit SHA or ref to check out; empty means default branch
 	Image   string // fully-qualified target image, including registry host
+	Type    string // svctype.* — selects the build strategy
 }
 
 // Result is the outcome of a successful build.

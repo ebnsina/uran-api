@@ -8,8 +8,8 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 ## Features
 
 - **Git-driven deploys** — connect a repo; pushes build and ship automatically.
-- **Multiple service types** — HTTP web services, background workers (no inbound
-  routing), and scheduled cron jobs.
+- **Multiple service types** — HTTP web services, static sites, background
+  workers (no inbound routing), and scheduled cron jobs.
 - **Managed databases** — provision a Postgres instance per project
   (CloudNativePG); apps connect via an in-namespace connection URI.
 - **Zero-config builds** — [Nixpacks](https://nixpacks.com) detects the stack;

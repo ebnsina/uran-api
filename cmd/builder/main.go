@@ -39,7 +39,10 @@ func run(log *slog.Logger) error {
 	}
 	defer st.Close()
 
-	backend := build.NewNixpacksBuilder(cfg.BuildWorkdir)
+	backend := build.NewDispatcher(
+		build.NewNixpacksBuilder(cfg.BuildWorkdir),
+		build.NewStaticBuilder(cfg.BuildWorkdir),
+	)
 	proc := builder.New(st, backend, cfg.Registry, log)
 	return proc.Run(ctx)
 }
