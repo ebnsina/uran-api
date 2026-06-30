@@ -14,6 +14,7 @@ import (
 	"github.com/ebnsina/uran-api/internal/api"
 	"github.com/ebnsina/uran-api/internal/auth"
 	"github.com/ebnsina/uran-api/internal/config"
+	"github.com/ebnsina/uran-api/internal/k8s"
 	"github.com/ebnsina/uran-api/internal/store"
 )
 
@@ -44,8 +45,13 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("migrations applied")
 
+	reader, err := k8s.NewReader(cfg.Kubeconfig)
+	if err != nil {
+		return err
+	}
+
 	authn := auth.New(st, cfg.SessionTTL)
-	srv := api.New(st, authn, log, cfg.GitHubWebhookSecret)
+	srv := api.New(st, authn, log, cfg.GitHubWebhookSecret, reader)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
