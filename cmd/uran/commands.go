@@ -710,6 +710,28 @@ func cmdScale(args []string) error {
 	return nil
 }
 
+// cmdSuspend scales a service to zero; cmdResume restores it.
+func cmdSuspend(args []string) error { return suspendResume(args, "suspend") }
+func cmdResume(args []string) error  { return suspendResume(args, "resume") }
+
+func suspendResume(args []string, action string) error {
+	fs := flag.NewFlagSet(action, flag.ExitOnError)
+	service := fs.Int64("service", 0, "service id")
+	_ = fs.Parse(args)
+	if *service == 0 {
+		return fmt.Errorf("usage: uran %s --service ID", action)
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/services/%d/%s", *service, action), nil, nil); err != nil {
+		return err
+	}
+	fmt.Printf("%s requested for service %d\n", action, *service)
+	return nil
+}
+
 // cmdHealth sets a service's HTTP health-check path (empty for a TCP check).
 func cmdHealth(args []string) error {
 	fs := flag.NewFlagSet("health", flag.ExitOnError)

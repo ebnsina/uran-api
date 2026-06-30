@@ -41,6 +41,7 @@ type Service struct {
 	MaxReplicas  int32     `json:"max_replicas"`
 	DiskSize     string    `json:"disk_size,omitempty"`
 	DiskPath     string    `json:"disk_path,omitempty"`
+	Suspended    bool      `json:"suspended"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 

@@ -37,14 +37,16 @@ type ServiceSpec struct {
 	DiskSize     string            // persistent disk size (e.g. "1Gi"); empty means none
 	DiskPath     string            // mount path for the disk
 	PullCreds    []RegistryCred    // private registry credentials for image pulls
+	Suspended    bool              // when true, the service runs zero replicas
 }
 
 // hasDisk reports whether a persistent disk is attached.
 func (s ServiceSpec) hasDisk() bool { return s.DiskSize != "" && s.DiskPath != "" }
 
 // autoscaled reports whether the spec uses an HPA. A disk pins the service to a
-// single replica, so autoscaling is disabled while a disk is attached.
-func (s ServiceSpec) autoscaled() bool { return s.MaxReplicas > 0 && !s.hasDisk() }
+// single replica and a suspended service runs zero replicas, so autoscaling is
+// disabled in both cases.
+func (s ServiceSpec) autoscaled() bool { return s.MaxReplicas > 0 && !s.hasDisk() && !s.Suspended }
 
 // envSecretName is the Secret that holds a service's environment variables.
 func envSecretName(name string) string { return name + "-env" }
@@ -188,6 +190,9 @@ func (r *Reconciler) applyDeployment(ctx context.Context, spec ServiceSpec) erro
 		WithTemplate(coreac.PodTemplateSpec().WithLabels(labels).WithSpec(podSpec))
 
 	switch {
+	case spec.Suspended:
+		// Scaled to zero — no running pods.
+		depSpec = depSpec.WithReplicas(0)
 	case spec.hasDisk():
 		// A ReadWriteOnce disk can't be shared across pods: pin to one replica
 		// and roll with maxSurge=0 so the old pod releases the volume before the

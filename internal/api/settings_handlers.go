@@ -117,6 +117,27 @@ func (s *Server) handleDetachDisk(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleSuspend(w http.ResponseWriter, r *http.Request) {
+	s.setSuspended(w, r, true)
+}
+
+func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
+	s.setSuspended(w, r, false)
+}
+
+func (s *Server) setSuspended(w http.ResponseWriter, r *http.Request, suspended bool) {
+	svc, ok := s.requireServiceAccess(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.SetServiceSuspended(r.Context(), svc.ID, suspended); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not update service")
+		return
+	}
+	s.applyServiceChange(r.Context(), svc.ID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // applyServiceChange re-applies the current settings without a rebuild by
 // re-deploying the service's latest built image. If the service has never been
 // deployed, the change takes effect on the next deploy.

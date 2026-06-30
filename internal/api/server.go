@@ -96,6 +96,8 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/services/{serviceID}/health", s.handleSetHealth)
 		r.Post("/v1/services/{serviceID}/disk", s.handleAttachDisk)
 		r.Delete("/v1/services/{serviceID}/disk", s.handleDetachDisk)
+		r.Post("/v1/services/{serviceID}/suspend", s.handleSuspend)
+		r.Post("/v1/services/{serviceID}/resume", s.handleResume)
 
 		r.Get("/v1/projects/{projectID}/databases", s.handleListDatabases)
 		r.Post("/v1/projects/{projectID}/databases", s.handleCreateDatabase)
