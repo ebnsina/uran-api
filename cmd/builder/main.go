@@ -40,7 +40,7 @@ func run(log *slog.Logger) error {
 	defer st.Close()
 
 	backend := build.NewDispatcher(
-		build.NewNixpacksBuilder(cfg.BuildWorkdir),
+		build.NewCodeBuilder(cfg.BuildWorkdir),
 		build.NewStaticBuilder(cfg.BuildWorkdir),
 	)
 	proc := builder.New(st, backend, cfg.Registry, log)

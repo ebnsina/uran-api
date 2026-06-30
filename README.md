@@ -14,8 +14,9 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   workers (no inbound routing), and scheduled cron jobs.
 - **Managed databases** — provision Postgres (CloudNativePG) or Redis per
   project; apps connect via an in-namespace connection URI.
-- **Zero-config builds** — [Nixpacks](https://nixpacks.com) detects the stack;
-  images are cached and pushed to a registry.
+- **Flexible builds** — uses your repo's `Dockerfile` if present, otherwise
+  [Nixpacks](https://nixpacks.com) auto-detects the stack; images are cached and
+  pushed to a registry.
 - **Kubernetes runtime** — each deploy is reconciled into a Deployment, Service,
   and Traefik route via Server-Side Apply, with rollout health checks.
 - **Tenant isolation** — each org gets its own namespace with a NetworkPolicy
