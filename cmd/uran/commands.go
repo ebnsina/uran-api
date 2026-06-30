@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -23,15 +24,27 @@ type envVar struct {
 	Secret bool   `json:"secret"`
 }
 
-// cmdLogin authenticates and saves the session.
+// cmdLogin authenticates with email/password, or stores an API token directly
+// (--token) for CI use.
 func cmdLogin(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	api := fs.String("api", "", "Uran API base URL, e.g. http://localhost:8099")
 	email := fs.String("email", "", "account email")
 	password := fs.String("password", "", "account password")
+	token := fs.String("token", "", "personal access token (instead of email/password)")
 	_ = fs.Parse(args)
 
-	if *api == "" || *email == "" || *password == "" {
+	if *api == "" {
+		return fmt.Errorf("usage: uran login --api URL [--email E --password P | --token TOKEN]")
+	}
+	if *token != "" {
+		if err := saveCredentials(credentials{APIURL: *api, Token: *token}); err != nil {
+			return err
+		}
+		fmt.Println("saved API token for", *api)
+		return nil
+	}
+	if *email == "" || *password == "" {
 		return fmt.Errorf("usage: uran login --api URL --email EMAIL --password PASSWORD")
 	}
 
@@ -47,6 +60,87 @@ func cmdLogin(args []string) error {
 		return err
 	}
 	fmt.Println("logged in to", *api)
+	return nil
+}
+
+type apiToken struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+	Token  string `json:"token"`
+}
+
+// cmdToken dispatches token subcommands: create, list, rm.
+func cmdToken(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: uran token <create|list|rm> ...")
+	}
+	switch args[0] {
+	case "create":
+		return cmdTokenCreate(args[1:])
+	case "list":
+		return cmdTokenList(args[1:])
+	case "rm":
+		return cmdTokenRm(args[1:])
+	default:
+		return fmt.Errorf("unknown token subcommand %q", args[0])
+	}
+}
+
+func cmdTokenCreate(args []string) error {
+	fs := flag.NewFlagSet("token create", flag.ExitOnError)
+	name := fs.String("name", "", "token name")
+	_ = fs.Parse(args)
+	if *name == "" {
+		return fmt.Errorf("usage: uran token create --name NAME")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var t apiToken
+	if err := c.do(context.Background(), http.MethodPost, "/v1/tokens", map[string]string{"name": *name}, &t); err != nil {
+		return err
+	}
+	fmt.Println(t.Token)
+	fmt.Fprintln(os.Stderr, "(store this now — it won't be shown again)")
+	return nil
+}
+
+func cmdTokenList(args []string) error {
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var tokens []apiToken
+	if err := c.do(context.Background(), http.MethodGet, "/v1/tokens", nil, &tokens); err != nil {
+		return err
+	}
+	if len(tokens) == 0 {
+		fmt.Println("(no tokens)")
+		return nil
+	}
+	for _, t := range tokens {
+		fmt.Printf("%d  %-20s %s...\n", t.ID, t.Name, t.Prefix)
+	}
+	return nil
+}
+
+func cmdTokenRm(args []string) error {
+	fs := flag.NewFlagSet("token rm", flag.ExitOnError)
+	id := fs.Int64("id", 0, "token id")
+	_ = fs.Parse(args)
+	if *id == 0 {
+		return fmt.Errorf("usage: uran token rm --id ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodDelete, fmt.Sprintf("/v1/tokens/%d", *id), nil, nil); err != nil {
+		return err
+	}
+	fmt.Printf("deleted token %d\n", *id)
 	return nil
 }
 
