@@ -1,7 +1,7 @@
 # uran-api
 
-The Go control plane for **Uran**, a Git-driven platform-as-a-service: push to
-Git → automatic build → running, routed service. This repo holds the API, build
+**Uran — push a repo, get a running app.** From `git push` to a live, routed,
+TLS-secured URL in seconds. This repo is the Go control plane: the API, build
 worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 `uran-web`.
 
