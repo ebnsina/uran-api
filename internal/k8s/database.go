@@ -29,6 +29,7 @@ type PostgresSpec struct {
 	Instances int32  // number of nodes (>1 enables HA + a read endpoint)
 	Size      string // instance.* size for CPU/memory
 	Storage   string // PVC size, e.g. "1Gi"
+	Backups   bool   // enable WAL archiving + scheduled backups to object storage
 }
 
 // ProvisionPostgres creates/updates a CloudNativePG cluster in the namespace
@@ -43,26 +44,39 @@ func (r *Reconciler) ProvisionPostgres(ctx context.Context, namespace, name stri
 		return err
 	}
 	res := instance.Get(spec.Size)
+	clusterSpec := map[string]any{
+		"instances": int64(spec.Instances),
+		"storage":   map[string]any{"size": spec.Storage},
+		// Explicit resources so the pods satisfy the namespace ResourceQuota.
+		"resources": map[string]any{
+			"requests": map[string]any{"cpu": res.CPURequest, "memory": res.MemRequest},
+			"limits":   map[string]any{"cpu": res.CPULimit, "memory": res.MemLimit},
+		},
+	}
+
+	// Continuous backups (WAL archiving) to object storage, enabling PITR.
+	if spec.Backups && r.BackupsEnabled() {
+		if err := r.applyBackupCreds(ctx, namespace, name); err != nil {
+			return err
+		}
+		clusterSpec["backup"] = r.barmanObjectStore(name)
+	}
+
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "postgresql.cnpg.io/v1",
 		"kind":       "Cluster",
-		"metadata": map[string]any{
-			"name":      name,
-			"namespace": namespace,
-		},
-		"spec": map[string]any{
-			"instances": int64(spec.Instances),
-			"storage":   map[string]any{"size": spec.Storage},
-			// Explicit resources so the pods satisfy the namespace ResourceQuota.
-			"resources": map[string]any{
-				"requests": map[string]any{"cpu": res.CPURequest, "memory": res.MemRequest},
-				"limits":   map[string]any{"cpu": res.CPULimit, "memory": res.MemLimit},
-			},
-		},
+		"metadata":   map[string]any{"name": name, "namespace": namespace},
+		"spec":       clusterSpec,
 	}}
 	if _, err := r.dyn.Resource(cnpgClusterGVR).Namespace(namespace).
 		Apply(ctx, name, obj, applyOpts()); err != nil {
 		return fmt.Errorf("apply postgres cluster %s: %w", name, err)
+	}
+
+	if spec.Backups && r.BackupsEnabled() {
+		if err := r.applyScheduledBackup(ctx, namespace, name); err != nil {
+			return err
+		}
 	}
 	return nil
 }

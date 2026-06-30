@@ -26,6 +26,9 @@ const DatabaseChannel = "uran_databases"
 // "<namespace>:<clusterName>" (the DB row is deleted by the API first).
 const DatabaseTeardownChannel = "uran_db_teardowns"
 
+// DatabaseBackupChannel carries database IDs to back up on demand.
+const DatabaseBackupChannel = "uran_db_backups"
+
 // Notify publishes a payload on a NOTIFY channel using pg_notify, which (unlike
 // the NOTIFY statement) accepts the channel name as a bind parameter.
 func (s *Store) Notify(ctx context.Context, channel, payload string) error {

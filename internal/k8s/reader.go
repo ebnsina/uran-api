@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -17,6 +18,7 @@ import (
 type Reader struct {
 	kube    kubernetes.Interface
 	metrics metricsclient.Interface
+	dyn     dynamic.Interface
 }
 
 // NewReader builds a Reader from a kubeconfig file.
@@ -33,7 +35,20 @@ func NewReader(kubeconfigPath string) (*Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build metrics client: %w", err)
 	}
-	return &Reader{kube: kube, metrics: metrics}, nil
+	dyn, err := dynamic.NewForConfig(restCfg)
+	if err != nil {
+		return nil, fmt.Errorf("build dynamic client: %w", err)
+	}
+	return &Reader{kube: kube, metrics: metrics, dyn: dyn}, nil
+}
+
+// ListBackups returns the CNPG backups for a cluster (read-only).
+func (rd *Reader) ListBackups(ctx context.Context, namespace, cluster string) ([]BackupInfo, error) {
+	list, err := rd.dyn.Resource(cnpgBackupGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list backups: %w", err)
+	}
+	return backupInfos(list, cluster), nil
 }
 
 // PodMetric is the resource usage of one pod.

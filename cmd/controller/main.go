@@ -39,7 +39,12 @@ func run(log *slog.Logger) error {
 	}
 	defer st.Close()
 
-	recon, err := k8s.NewReconciler(cfg.Kubeconfig, cfg.BaseDomain, cfg.CertIssuer)
+	recon, err := k8s.NewReconciler(cfg.Kubeconfig, cfg.BaseDomain, cfg.CertIssuer, k8s.BackupConfig{
+		Endpoint:  cfg.BackupEndpoint,
+		Bucket:    cfg.BackupBucket,
+		AccessKey: cfg.BackupAccessKey,
+		SecretKey: cfg.BackupSecretKey,
+	})
 	if err != nil {
 		return err
 	}

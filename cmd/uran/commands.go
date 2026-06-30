@@ -262,6 +262,10 @@ func cmdDB(args []string) error {
 		return cmdDBConnection(args[1:])
 	case "scale":
 		return cmdDBScale(args[1:])
+	case "backup":
+		return cmdDBBackup(args[1:])
+	case "backups":
+		return cmdDBBackups(args[1:])
 	case "rm":
 		return cmdDBRm(args[1:])
 	default:
@@ -277,13 +281,14 @@ func cmdDBCreate(args []string) error {
 	instances := fs.Int("instances", 1, "standard: number of nodes (HA when >1)")
 	min := fs.Int("min", 1, "autoscale: min instances")
 	max := fs.Int("max", 3, "autoscale: max instances")
-	size := fs.String("size", "small", "instance size: small|medium|large")
+	size := fs.String("size", "small", "instance size: small|medium|large|xlarge|2xlarge")
 	storage := fs.String("storage", "1Gi", "disk size, e.g. 5Gi")
 	pooling := fs.Bool("pooling", false, "enable a PgBouncer connection pooler (postgres)")
+	backups := fs.Bool("backups", false, "enable continuous backups + PITR (postgres)")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *project == 0 || len(rest) != 1 {
-		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] [--pooling] NAME")
+		return fmt.Errorf("usage: uran db create --project ID [--engine E] [--tier standard|autoscale] [--instances N | --min N --max N] [--size S --storage G] [--pooling] [--backups] NAME")
 	}
 	c, err := authed()
 	if err != nil {
@@ -293,7 +298,7 @@ func cmdDBCreate(args []string) error {
 	body := map[string]any{
 		"name": rest[0], "engine": *engine, "tier": *tier,
 		"instances": *instances, "min_instances": *min, "max_instances": *max,
-		"size": *size, "storage": *storage, "pooling": *pooling,
+		"size": *size, "storage": *storage, "pooling": *pooling, "backups": *backups,
 	}
 	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/projects/%d/databases", *project), body, &db); err != nil {
 		return err
@@ -378,6 +383,53 @@ func cmdDBConnection(args []string) error {
 	}
 	if resp.PooledURI != "" {
 		fmt.Println("pooled:", resp.PooledURI)
+	}
+	return nil
+}
+
+func cmdDBBackup(args []string) error {
+	fs := flag.NewFlagSet("db backup", flag.ExitOnError)
+	id := fs.Int64("database", 0, "database id")
+	_ = fs.Parse(args)
+	if *id == 0 {
+		return fmt.Errorf("usage: uran db backup --database ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	if err := c.do(context.Background(), http.MethodPost, fmt.Sprintf("/v1/databases/%d/backups", *id), nil, nil); err != nil {
+		return err
+	}
+	fmt.Println("backup requested")
+	return nil
+}
+
+func cmdDBBackups(args []string) error {
+	fs := flag.NewFlagSet("db backups", flag.ExitOnError)
+	id := fs.Int64("database", 0, "database id")
+	_ = fs.Parse(args)
+	if *id == 0 {
+		return fmt.Errorf("usage: uran db backups --database ID")
+	}
+	c, err := authed()
+	if err != nil {
+		return err
+	}
+	var backups []struct {
+		Name      string `json:"name"`
+		Phase     string `json:"phase"`
+		StoppedAt string `json:"stopped_at"`
+	}
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/v1/databases/%d/backups", *id), nil, &backups); err != nil {
+		return err
+	}
+	if len(backups) == 0 {
+		fmt.Println("(no backups)")
+		return nil
+	}
+	for _, b := range backups {
+		fmt.Printf("%-40s %-12s %s\n", b.Name, b.Phase, b.StoppedAt)
 	}
 	return nil
 }
@@ -817,12 +869,12 @@ func cmdScale(args []string) error {
 	fs := flag.NewFlagSet("scale", flag.ExitOnError)
 	service := fs.Int64("service", 0, "service id")
 	replicas := fs.Int("replicas", 1, "fixed replica count (ignored when autoscaling)")
-	size := fs.String("size", "small", "instance size: small|medium|large")
+	size := fs.String("size", "small", "instance size: small|medium|large|xlarge|2xlarge")
 	min := fs.Int("min", 0, "autoscale min replicas (0 disables autoscaling)")
 	max := fs.Int("max", 0, "autoscale max replicas (0 disables autoscaling)")
 	_ = fs.Parse(args)
 	if *service == 0 {
-		return fmt.Errorf("usage: uran scale --service ID [--replicas N] [--size small|medium|large] [--min N --max N]")
+		return fmt.Errorf("usage: uran scale --service ID [--replicas N] [--size small|medium|large|xlarge|2xlarge] [--min N --max N]")
 	}
 	c, err := authed()
 	if err != nil {

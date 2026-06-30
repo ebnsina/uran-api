@@ -31,27 +31,28 @@ type Database struct {
 	Size          string `json:"size"`
 	Storage       string `json:"storage"`
 	Pooling       bool   `json:"pooling"`
+	Backups       bool   `json:"backups"`
 	ConnectionURI string `json:"-"`
 	ReadURI       string `json:"-"`
 	PooledURI     string `json:"-"`
 }
 
-const databaseCols = `id, project_id, name, slug, engine, status, tier, instances, min_instances, max_instances, size, storage, pooling, connection_uri, read_uri, pooled_uri`
+const databaseCols = `id, project_id, name, slug, engine, status, tier, instances, min_instances, max_instances, size, storage, pooling, backups, connection_uri, read_uri, pooled_uri`
 
 func scanDatabase(sc scanner) (Database, error) {
 	var d Database
 	err := sc.Scan(&d.ID, &d.ProjectID, &d.Name, &d.Slug, &d.Engine, &d.Status, &d.Tier,
-		&d.Instances, &d.MinInstances, &d.MaxInstances, &d.Size, &d.Storage, &d.Pooling, &d.ConnectionURI, &d.ReadURI, &d.PooledURI)
+		&d.Instances, &d.MinInstances, &d.MaxInstances, &d.Size, &d.Storage, &d.Pooling, &d.Backups, &d.ConnectionURI, &d.ReadURI, &d.PooledURI)
 	return d, err
 }
 
 // CreateDatabase inserts a database record in the "creating" state.
-func (s *Store) CreateDatabase(ctx context.Context, projectID int64, name, slug, engine, tier string, instances, minInstances, maxInstances int32, size, storage string, pooling bool) (Database, error) {
+func (s *Store) CreateDatabase(ctx context.Context, projectID int64, name, slug, engine, tier string, instances, minInstances, maxInstances int32, size, storage string, pooling, backups bool) (Database, error) {
 	return scanDatabase(s.pool.QueryRow(ctx,
-		`INSERT INTO databases (project_id, name, slug, engine, tier, instances, min_instances, max_instances, size, storage, pooling)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		`INSERT INTO databases (project_id, name, slug, engine, tier, instances, min_instances, max_instances, size, storage, pooling, backups)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 RETURNING `+databaseCols,
-		projectID, name, slug, engine, tier, instances, minInstances, maxInstances, size, storage, pooling,
+		projectID, name, slug, engine, tier, instances, minInstances, maxInstances, size, storage, pooling, backups,
 	))
 }
 
@@ -100,12 +101,12 @@ func (s *Store) DatabaseByID(ctx context.Context, id int64) (Database, int64, er
 	var orgID int64
 	err := s.pool.QueryRow(ctx,
 		`SELECT d.id, d.project_id, d.name, d.slug, d.engine, d.status, d.tier,
-		        d.instances, d.min_instances, d.max_instances, d.size, d.storage, d.pooling, d.connection_uri, d.read_uri, d.pooled_uri, p.org_id
+		        d.instances, d.min_instances, d.max_instances, d.size, d.storage, d.pooling, d.backups, d.connection_uri, d.read_uri, d.pooled_uri, p.org_id
 		 FROM databases d JOIN projects p ON p.id = d.project_id
 		 WHERE d.id = $1`,
 		id,
 	).Scan(&d.ID, &d.ProjectID, &d.Name, &d.Slug, &d.Engine, &d.Status, &d.Tier,
-		&d.Instances, &d.MinInstances, &d.MaxInstances, &d.Size, &d.Storage, &d.Pooling, &d.ConnectionURI, &d.ReadURI, &d.PooledURI, &orgID)
+		&d.Instances, &d.MinInstances, &d.MaxInstances, &d.Size, &d.Storage, &d.Pooling, &d.Backups, &d.ConnectionURI, &d.ReadURI, &d.PooledURI, &orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, 0, ErrNotFound
 	}

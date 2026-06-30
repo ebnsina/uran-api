@@ -15,7 +15,9 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
 - **Managed databases** — provision Postgres (CloudNativePG) or Redis per
   project. Two Postgres tiers: **standard** (fixed instances + size, HA with a
   load-balanced read endpoint) and **autoscale** (instances scale on CPU between
-  min/max). Optional **PgBouncer connection pooling**; Redis is persistent.
+  min/max). Optional **PgBouncer connection pooling**, and **continuous backups
+  + point-in-time recovery** to an S3-compatible object store (daily schedule
+  plus on-demand). Redis is persistent.
 - **Observability & metering** — runtime logs, per-pod metrics, a project status
   page, and per-service usage sampling (CPU-seconds, memory) for billing.
 - **Flexible builds** — uses your repo's `Dockerfile` if present, otherwise
@@ -31,8 +33,10 @@ worker, Kubernetes controller, and CLI. The dashboard lives in the sibling
   are provisioned by cert-manager and served over HTTPS.
 - **Env vars & secrets** — injected into workloads via per-service Secrets;
   mark a var build-time to also pass it as a build arg.
-- **Scaling & autoscaling** — set replica count and instance size, or autoscale
-  on CPU (HPA), with readiness/liveness health checks gating rollouts.
+- **Scaling & autoscaling** — set replica count and instance size (`small` →
+  `2xlarge`, including the larger "pro compute" sizes for CPU/memory-heavy
+  workloads), or autoscale on CPU (HPA), with readiness/liveness health checks
+  gating rollouts.
 - **Suspend / resume** — scale a service to zero to save resources, and back.
 - **Persistent disks** — attach a volume to a service for stateful workloads;
   data survives restarts and redeploys.
@@ -98,8 +102,11 @@ uran domain list --service 3
 uran db create     --project 1 maindb            # or --engine redis
 uran db create     --project 1 --instances 2 --size medium --storage 5Gi hadb
 uran db create     --project 1 --tier autoscale --min 1 --max 3 appdb  # autoscaling
+uran db create     --project 1 --pooling --backups pgdb # pooling + continuous backups
 uran db scale      --database 1 --instances 3 --size large
-uran db connection --database 1                  # prints rw + read URIs
+uran db connection --database 1                  # prints rw + read + pooled URIs
+uran db backup     --database 1                  # on-demand backup
+uran db backups    --database 1                  # list backups
 uran scale  --service 3 --replicas 3 --size medium    # or --min 1 --max 4
 uran health --service 3 --path /healthz
 uran disk attach --service 3 --size 1Gi --path /data
@@ -143,6 +150,7 @@ uran metrics --service 3                  # per-pod CPU/memory
 | GET/DELETE | `/v1/databases/{databaseID}` | bearer | Get / delete a database |
 | GET | `/v1/databases/{databaseID}/connection` | bearer | Connection URIs (rw + read) |
 | POST | `/v1/databases/{databaseID}/scale` | bearer | Change instances/size/storage |
+| GET/POST | `/v1/databases/{databaseID}/backups` | bearer | List / trigger backups (Postgres) |
 | POST | `/v1/services/{serviceID}/scale` | bearer | Replicas, instance size, autoscaling |
 | POST | `/v1/services/{serviceID}/health` | bearer | Set health-check path |
 | POST | `/v1/services/{serviceID}/suspend` | bearer | Scale to zero |

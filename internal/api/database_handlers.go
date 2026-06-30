@@ -22,6 +22,7 @@ type createDatabaseReq struct {
 	Size         string `json:"size"`
 	Storage      string `json:"storage"`
 	Pooling      bool   `json:"pooling"`
+	Backups      bool   `json:"backups"`
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +85,8 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pooling := req.Pooling && engine == "postgres"
-	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, tier, instances, minI, maxI, size, storage, pooling)
+	backups := req.Backups && engine == "postgres"
+	db, err := s.store.CreateDatabase(r.Context(), projectID, req.Name, slugify(req.Name), engine, tier, instances, minI, maxI, size, storage, pooling, backups)
 	if err != nil {
 		writeError(w, http.StatusConflict, "could not create database (slug may be taken)")
 		return
@@ -212,7 +214,7 @@ func (s *Server) normalizeSizeStorage(w http.ResponseWriter, size, storage strin
 		size = instance.Small
 	}
 	if !instance.IsValid(size) {
-		writeError(w, http.StatusBadRequest, "invalid size (small|medium|large)")
+		writeError(w, http.StatusBadRequest, "invalid size (small|medium|large|xlarge|2xlarge)")
 		return "", "", false
 	}
 	if storage == "" {

@@ -81,7 +81,7 @@ Usage:
   uran db list       --project ID
   uran db connection --database ID
   uran db rm         --database ID
-  uran scale  --service ID [--replicas N] [--size small|medium|large] [--min N --max N]
+  uran scale  --service ID [--replicas N] [--size small|medium|large|xlarge|2xlarge] [--min N --max N]
   uran health  --service ID --path /healthz
   uran suspend --service ID
   uran resume  --service ID
