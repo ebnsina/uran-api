@@ -56,6 +56,23 @@ func (s *Store) ListOrgs(ctx context.Context, userID int64) ([]Org, error) {
 	return out, rows.Err()
 }
 
+// UpdateOrg renames an org.
+func (s *Store) UpdateOrg(ctx context.Context, id int64, name, slug string) (Org, error) {
+	var o Org
+	err := s.pool.QueryRow(ctx,
+		`UPDATE orgs SET name = $2, slug = $3 WHERE id = $1
+		 RETURNING id, name, slug, created_at`,
+		id, name, slug,
+	).Scan(&o.ID, &o.Name, &o.Slug, &o.CreatedAt)
+	return o, err
+}
+
+// DeleteOrg removes an org; projects, services and related rows cascade.
+func (s *Store) DeleteOrg(ctx context.Context, id int64) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM orgs WHERE id = $1`, id)
+	return err
+}
+
 // IsOrgMember reports whether the user belongs to the org.
 func (s *Store) IsOrgMember(ctx context.Context, userID, orgID int64) (bool, error) {
 	var exists bool
@@ -75,6 +92,23 @@ func (s *Store) CreateProject(ctx context.Context, orgID int64, name, slug strin
 		orgID, name, slug,
 	).Scan(&p.ID, &p.OrgID, &p.Name, &p.Slug, &p.CreatedAt)
 	return p, err
+}
+
+// UpdateProject renames a project.
+func (s *Store) UpdateProject(ctx context.Context, id int64, name, slug string) (Project, error) {
+	var p Project
+	err := s.pool.QueryRow(ctx,
+		`UPDATE projects SET name = $2, slug = $3 WHERE id = $1
+		 RETURNING id, org_id, name, slug, created_at`,
+		id, name, slug,
+	).Scan(&p.ID, &p.OrgID, &p.Name, &p.Slug, &p.CreatedAt)
+	return p, err
+}
+
+// DeleteProject removes a project; its services and related rows cascade.
+func (s *Store) DeleteProject(ctx context.Context, id int64) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM projects WHERE id = $1`, id)
+	return err
 }
 
 // ProjectByID fetches a project. Returns ErrNotFound if absent.

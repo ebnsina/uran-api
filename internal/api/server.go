@@ -73,6 +73,8 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/v1/orgs", s.handleListOrgs)
 		r.Post("/v1/orgs", s.handleCreateOrg)
+		r.Patch("/v1/orgs/{orgID}", s.handleUpdateOrg)
+		r.Delete("/v1/orgs/{orgID}", s.handleDeleteOrg)
 
 		r.Get("/v1/orgs/{orgID}/registry-credentials", s.handleListRegistryCreds)
 		r.Post("/v1/orgs/{orgID}/registry-credentials", s.handleAddRegistryCred)
@@ -92,6 +94,8 @@ func (s *Server) Router() http.Handler {
 		r.Get("/v1/orgs/{orgID}/projects", s.handleListProjects)
 		r.Post("/v1/orgs/{orgID}/projects", s.handleCreateProject)
 		r.Get("/v1/projects/{projectID}", s.handleGetProject)
+		r.Patch("/v1/projects/{projectID}", s.handleUpdateProject)
+		r.Delete("/v1/projects/{projectID}", s.handleDeleteProject)
 
 		r.Get("/v1/projects/{projectID}/services", s.handleListServices)
 		r.Post("/v1/projects/{projectID}/services", s.handleCreateService)

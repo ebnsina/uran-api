@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ebnsina/uran-api/internal/auth"
+	"github.com/ebnsina/uran-api/internal/rbac"
 	"github.com/ebnsina/uran-api/internal/svctype"
 )
 
@@ -61,6 +62,51 @@ func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, org)
+}
+
+// handleUpdateOrg renames an org (admin+).
+func (s *Server) handleUpdateOrg(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := pathInt(r, "orgID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid org id")
+		return
+	}
+	if _, ok := s.requireOrgRole(w, r, orgID, rbac.Admin); !ok {
+		return
+	}
+	var req createOrgReq
+	if err := readJSON(r, &req); err != nil || strings.TrimSpace(req.Name) == "" {
+		writeError(w, http.StatusBadRequest, "name required")
+		return
+	}
+	slug := slugify(req.Name)
+	if slug == "" {
+		writeError(w, http.StatusBadRequest, "name must contain alphanumeric characters")
+		return
+	}
+	org, err := s.store.UpdateOrg(r.Context(), orgID, req.Name, slug)
+	if err != nil {
+		writeError(w, http.StatusConflict, "could not rename org (slug may be taken)")
+		return
+	}
+	writeJSON(w, http.StatusOK, org)
+}
+
+// handleDeleteOrg deletes an org and everything under it (owner only).
+func (s *Server) handleDeleteOrg(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := pathInt(r, "orgID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid org id")
+		return
+	}
+	if _, ok := s.requireOrgRole(w, r, orgID, rbac.Owner); !ok {
+		return
+	}
+	if err := s.store.DeleteOrg(r.Context(), orgID); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete org")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +203,47 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
+}
+
+// handleUpdateProject renames a project (member+ / write access).
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := s.requireProjectAccess(w, r)
+	if !ok {
+		return
+	}
+	var req createProjectReq
+	if err := readJSON(r, &req); err != nil || strings.TrimSpace(req.Name) == "" {
+		writeError(w, http.StatusBadRequest, "name required")
+		return
+	}
+	p, err := s.store.UpdateProject(r.Context(), projectID, req.Name, slugify(req.Name))
+	if err != nil {
+		writeError(w, http.StatusConflict, "could not rename project (slug may be taken)")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// handleDeleteProject deletes a project and its services (admin+).
+func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := pathInt(r, "projectID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	p, err := s.store.ProjectByID(r.Context(), projectID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if _, ok := s.requireOrgRole(w, r, p.OrgID, rbac.Admin); !ok {
+		return
+	}
+	if err := s.store.DeleteProject(r.Context(), projectID); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete project")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type createServiceReq struct {
