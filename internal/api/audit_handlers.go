@@ -3,12 +3,17 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/ebnsina/uran-api/internal/auth"
+	"github.com/ebnsina/uran-api/internal/store"
 )
 
-// auditLimit caps how many recent entries the audit endpoint returns.
-const auditLimit = 100
+// Audit pagination bounds.
+const (
+	auditDefaultLimit = 20
+	auditMaxLimit     = 100
+)
 
 // statusRecorder wraps a ResponseWriter to capture the status code while
 // preserving streaming (Flusher) for SSE/log endpoints.
@@ -48,13 +53,41 @@ func (s *Server) auditMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// handleListAudit returns the caller's recent audited actions.
+// auditPage is the paginated envelope returned by the audit endpoint.
+type auditPage struct {
+	Items  []store.AuditEntry `json:"items"`
+	Total  int                `json:"total"`
+	Limit  int                `json:"limit"`
+	Offset int                `json:"offset"`
+}
+
+// handleListAudit returns a filtered, paginated page of the caller's audited
+// actions. Supports ?q= (path search), ?method=, ?limit=, ?offset=.
 func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFrom(r.Context())
-	entries, err := s.store.ListAudit(r.Context(), u.ID, auditLimit)
+	q := r.URL.Query()
+
+	limit := auditDefaultLimit
+	if v, err := strconv.Atoi(q.Get("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	if limit > auditMaxLimit {
+		limit = auditMaxLimit
+	}
+	offset := 0
+	if v, err := strconv.Atoi(q.Get("offset")); err == nil && v > 0 {
+		offset = v
+	}
+
+	entries, total, err := s.store.ListAudit(r.Context(), u.ID, store.AuditQuery{
+		Search: q.Get("q"),
+		Method: q.Get("method"),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not list audit log")
 		return
 	}
-	writeJSON(w, http.StatusOK, entries)
+	writeJSON(w, http.StatusOK, auditPage{Items: entries, Total: total, Limit: limit, Offset: offset})
 }
