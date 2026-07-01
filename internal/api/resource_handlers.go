@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ebnsina/uran-api/internal/auth"
+	"github.com/ebnsina/uran-api/internal/naming"
 	"github.com/ebnsina/uran-api/internal/rbac"
+	"github.com/ebnsina/uran-api/internal/store"
 	"github.com/ebnsina/uran-api/internal/svctype"
 )
 
@@ -102,9 +105,14 @@ func (s *Server) handleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireOrgRole(w, r, orgID, rbac.Owner); !ok {
 		return
 	}
+	namespace := naming.NamespaceForOrg(orgID)
 	if err := s.store.DeleteOrg(r.Context(), orgID); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not delete org")
 		return
+	}
+	// Tear down the whole namespace (workloads, routes, certs, databases).
+	if err := s.store.Notify(r.Context(), store.ResourceTeardownChannel, "ns:"+namespace); err != nil {
+		s.log.Error("notify org teardown", "org_id", orgID, "err", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -239,9 +247,26 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireOrgRole(w, r, p.OrgID, rbac.Admin); !ok {
 		return
 	}
+	// Collect the k8s targets before the rows cascade away.
+	namespace := naming.NamespaceForOrg(p.OrgID)
+	services, _ := s.store.ListServices(r.Context(), projectID)
+	databases, _ := s.store.ListDatabases(r.Context(), projectID)
+
 	if err := s.store.DeleteProject(r.Context(), projectID); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not delete project")
 		return
+	}
+	for _, svc := range services {
+		if err := s.store.Notify(r.Context(), store.ResourceTeardownChannel,
+			fmt.Sprintf("svc:%s:%s", namespace, svc.Slug)); err != nil {
+			s.log.Error("notify service teardown", "slug", svc.Slug, "err", err)
+		}
+	}
+	for _, db := range databases {
+		if err := s.store.Notify(r.Context(), store.DatabaseTeardownChannel,
+			fmt.Sprintf("%s:%s:%s", namespace, naming.DatabaseCluster(db.Slug), db.Engine)); err != nil {
+			s.log.Error("notify database teardown", "slug", db.Slug, "err", err)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

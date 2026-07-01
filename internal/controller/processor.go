@@ -63,6 +63,12 @@ func (p *Processor) Run(ctx context.Context) error {
 		})
 	})
 	g.Go(func() error {
+		p.log.Info("controller listening for resource teardowns", "channel", store.ResourceTeardownChannel)
+		return p.store.Listen(ctx, store.ResourceTeardownChannel, func(payload string) {
+			go p.resourceTeardown(ctx, payload)
+		})
+	})
+	g.Go(func() error {
 		p.log.Info("controller listening for databases", "channel", store.DatabaseChannel)
 		return p.store.Listen(ctx, store.DatabaseChannel, func(payload string) {
 			id, err := strconv.ParseInt(payload, 10, 64)
@@ -203,6 +209,39 @@ func (p *Processor) teardown(ctx context.Context, payload string) {
 		return
 	}
 	log.Info("preview torn down", "name", name)
+}
+
+// resourceTeardown deletes k8s objects for a deleted org/project/service. The
+// payload is self-describing because the DB rows are already gone:
+//
+//	"ns:<namespace>"          -> delete the whole namespace (org delete)
+//	"svc:<namespace>:<slug>"  -> delete one service's workload objects
+func (p *Processor) resourceTeardown(ctx context.Context, payload string) {
+	parts := strings.SplitN(payload, ":", 3)
+	switch parts[0] {
+	case "ns":
+		if len(parts) != 2 {
+			p.log.Warn("bad namespace teardown", "payload", payload)
+			return
+		}
+		if err := p.recon.DeleteNamespace(ctx, parts[1]); err != nil {
+			p.log.Error("delete namespace", "namespace", parts[1], "err", err)
+			return
+		}
+		p.log.Info("namespace torn down", "namespace", parts[1])
+	case "svc":
+		if len(parts) != 3 {
+			p.log.Warn("bad service teardown", "payload", payload)
+			return
+		}
+		if err := p.recon.Delete(ctx, parts[1], parts[2]); err != nil {
+			p.log.Error("delete workload", "namespace", parts[1], "name", parts[2], "err", err)
+			return
+		}
+		p.log.Info("workload torn down", "namespace", parts[1], "name", parts[2])
+	default:
+		p.log.Warn("unknown teardown kind", "payload", payload)
+	}
 }
 
 // reconcileDatabase provisions a managed Postgres cluster, waits for it to be

@@ -19,6 +19,13 @@ const DeploymentChannel = "uran_deployments"
 // LISTENs on it to delete the preview's cluster objects.
 const TeardownChannel = "uran_teardowns"
 
+// ResourceTeardownChannel carries self-describing cleanup requests for deleted
+// orgs/projects/services (the DB rows are removed by the API first). Payloads:
+//
+//	"ns:<namespace>"          delete a whole org namespace (org delete)
+//	"svc:<namespace>:<slug>"  delete a single service's workload objects
+const ResourceTeardownChannel = "uran_resource_teardowns"
+
 // DatabaseChannel carries IDs of databases to provision (payload "<dbID>").
 const DatabaseChannel = "uran_databases"
 

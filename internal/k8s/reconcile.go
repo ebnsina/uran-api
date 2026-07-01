@@ -381,6 +381,13 @@ func (r *Reconciler) Delete(ctx context.Context, namespace, name string) error {
 	return nil
 }
 
+// DeleteNamespace removes an org's entire namespace and everything in it
+// (workloads, services, routes, certs, databases). Idempotent.
+func (r *Reconciler) DeleteNamespace(ctx context.Context, namespace string) error {
+	err := r.kube.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
+	return ignoreNotFound(err)
+}
+
 func ignoreNotFound(err error) error {
 	if apierrors.IsNotFound(err) {
 		return nil
