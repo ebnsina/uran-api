@@ -1,0 +1,15 @@
+[Unit]
+Description=Uran control-plane API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/uran-api
+EnvironmentFile=/root/uran-api/.env
+ExecStart=/usr/local/bin/uran-api
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
