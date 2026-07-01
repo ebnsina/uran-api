@@ -1,0 +1,10 @@
+# A self-signed cluster issuer for the test box: cert-manager issues a
+# (browser-untrusted) certificate per service host so routes terminate TLS
+# without depending on Let's Encrypt / a real domain. Its name must match
+# URAN_CERT_ISSUER. Swap for a Let's Encrypt ClusterIssuer in production.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: uran-selfsigned
+spec:
+  selfSigned: {}

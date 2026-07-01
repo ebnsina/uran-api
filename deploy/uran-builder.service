@@ -1,0 +1,18 @@
+[Unit]
+Description=Uran build worker (Nixpacks + BuildKit)
+After=network-online.target docker.service uran-api.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/uran-api
+EnvironmentFile=/root/uran-api/.env
+# Ensure nixpacks/docker/git resolve under systemd's minimal PATH.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/bin/uran-builder
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

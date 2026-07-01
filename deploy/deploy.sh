@@ -16,19 +16,23 @@ export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
-say "API — pull + build"
+say "Go services — pull + build (api, builder, controller)"
 git -C "$API_DIR" pull --ff-only
-( cd "$API_DIR" && go build -o /usr/local/bin/uran-api ./cmd/api )
-
-say "API — restart"
-systemctl restart uran-api
+( cd "$API_DIR" \
+  && go build -o /usr/local/bin/uran-api ./cmd/api \
+  && go build -o /usr/local/bin/uran-builder ./cmd/builder \
+  && go build -o /usr/local/bin/uran-controller ./cmd/controller )
 
 say "Web — pull + build"
 git -C "$WEB_DIR" pull --ff-only
 ( cd "$WEB_DIR" && npm ci --no-audit --no-fund && npm run build )
 
-say "Web — restart"
-systemctl restart uran-web
+say "Restart enabled services"
+for unit in uran-api uran-builder uran-controller uran-web; do
+  if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+    systemctl restart "$unit" && echo "  restarted $unit"
+  fi
+done
 
 say "Health"
 sleep 3
