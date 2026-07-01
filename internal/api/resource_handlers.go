@@ -140,6 +140,25 @@ func (s *Server) requireProjectAccess(w http.ResponseWriter, r *http.Request) (i
 	return projectID, true
 }
 
+// handleGetProject returns a single project (incl. its org) so pages can load
+// directly without depending on a cached list.
+func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
+	projectID, ok := pathInt(r, "projectID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	p, err := s.store.ProjectByID(r.Context(), projectID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if _, ok := s.authorizeOrg(w, r, p.OrgID); !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
 type createServiceReq struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`

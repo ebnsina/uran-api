@@ -89,6 +89,7 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/v1/orgs/{orgID}/projects", s.handleListProjects)
 		r.Post("/v1/orgs/{orgID}/projects", s.handleCreateProject)
+		r.Get("/v1/projects/{projectID}", s.handleGetProject)
 
 		r.Get("/v1/projects/{projectID}/services", s.handleListServices)
 		r.Post("/v1/projects/{projectID}/services", s.handleCreateService)
