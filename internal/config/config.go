@@ -24,6 +24,7 @@ type APIConfig struct {
 	Kubeconfig          string        // URAN_KUBECONFIG — for runtime logs/metrics
 	GitHubClientID      string        // URAN_GITHUB_CLIENT_ID — OAuth App (connect + list repos)
 	GitHubClientSecret  string        // URAN_GITHUB_CLIENT_SECRET
+	BaseDomain          string        // URAN_BASE_DOMAIN — wildcard domain for public service URLs
 }
 
 // BuilderConfig is the configuration for the build worker.
@@ -60,6 +61,7 @@ func LoadAPI() (APIConfig, error) {
 		Kubeconfig:          l.str("URAN_KUBECONFIG"),
 		GitHubClientID:      l.str("URAN_GITHUB_CLIENT_ID"),
 		GitHubClientSecret:  l.str("URAN_GITHUB_CLIENT_SECRET"),
+		BaseDomain:          l.str("URAN_BASE_DOMAIN"),
 	}
 	return cfg, l.err()
 }

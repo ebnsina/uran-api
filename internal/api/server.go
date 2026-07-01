@@ -23,13 +23,14 @@ type Server struct {
 	reader         *k8s.Reader
 	ghClientID     string
 	ghClientSecret string
+	baseDomain     string
 }
 
 // New builds a Server. webhookSecret is the HMAC secret used to verify GitHub
 // webhooks; reader provides read-only cluster access for logs/metrics;
 // ghClientID/ghClientSecret are the GitHub OAuth App credentials for the
 // connect-and-list-repos flow (may be empty to disable it).
-func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret string, reader *k8s.Reader, ghClientID, ghClientSecret string) *Server {
+func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret string, reader *k8s.Reader, ghClientID, ghClientSecret, baseDomain string) *Server {
 	return &Server{
 		store:          s,
 		auth:           a,
@@ -38,6 +39,7 @@ func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret 
 		reader:         reader,
 		ghClientID:     ghClientID,
 		ghClientSecret: ghClientSecret,
+		baseDomain:     baseDomain,
 	}
 }
 
