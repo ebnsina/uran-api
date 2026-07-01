@@ -16,7 +16,9 @@ PORT=3000
 HOST=0.0.0.0
 ENV
 
-# Stop any old nohup processes, then hand over to systemd.
+# Stop any old nohup processes, then hand over to systemd. Match the exact
+# process name (`uran-api`) — a full-path pattern misses a bare-name launch.
+pkill -x uran-api 2>/dev/null || true
 pkill -f '/usr/local/bin/uran-api' 2>/dev/null || true
 pkill -f 'node build' 2>/dev/null || true
 
