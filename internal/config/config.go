@@ -22,6 +22,8 @@ type APIConfig struct {
 	Env                 string        // URAN_ENV
 	GitHubWebhookSecret string        // URAN_GITHUB_WEBHOOK_SECRET
 	Kubeconfig          string        // URAN_KUBECONFIG — for runtime logs/metrics
+	GitHubClientID      string        // URAN_GITHUB_CLIENT_ID — OAuth App (connect + list repos)
+	GitHubClientSecret  string        // URAN_GITHUB_CLIENT_SECRET
 }
 
 // BuilderConfig is the configuration for the build worker.
@@ -56,6 +58,8 @@ func LoadAPI() (APIConfig, error) {
 		Env:                 l.str("URAN_ENV"),
 		GitHubWebhookSecret: l.str("URAN_GITHUB_WEBHOOK_SECRET"),
 		Kubeconfig:          l.str("URAN_KUBECONFIG"),
+		GitHubClientID:      l.str("URAN_GITHUB_CLIENT_ID"),
+		GitHubClientSecret:  l.str("URAN_GITHUB_CLIENT_SECRET"),
 	}
 	return cfg, l.err()
 }
@@ -76,8 +80,8 @@ func LoadBuilder() (BuilderConfig, error) {
 func LoadController() (ControllerConfig, error) {
 	l := &loader{}
 	cfg := ControllerConfig{
-		DatabaseURL: l.str("URAN_DATABASE_URL"),
-		Env:         l.str("URAN_ENV"),
+		DatabaseURL:     l.str("URAN_DATABASE_URL"),
+		Env:             l.str("URAN_ENV"),
 		Kubeconfig:      l.str("URAN_KUBECONFIG"),
 		BaseDomain:      l.str("URAN_BASE_DOMAIN"),
 		CertIssuer:      l.str("URAN_CERT_ISSUER"),

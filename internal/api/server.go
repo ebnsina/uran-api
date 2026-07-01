@@ -16,17 +16,29 @@ import (
 
 // Server holds dependencies shared by the HTTP handlers.
 type Server struct {
-	store         *store.Store
-	auth          *auth.Authenticator
-	log           *slog.Logger
-	webhookSecret string
-	reader        *k8s.Reader
+	store          *store.Store
+	auth           *auth.Authenticator
+	log            *slog.Logger
+	webhookSecret  string
+	reader         *k8s.Reader
+	ghClientID     string
+	ghClientSecret string
 }
 
 // New builds a Server. webhookSecret is the HMAC secret used to verify GitHub
-// webhooks; reader provides read-only cluster access for logs/metrics.
-func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret string, reader *k8s.Reader) *Server {
-	return &Server{store: s, auth: a, log: log, webhookSecret: webhookSecret, reader: reader}
+// webhooks; reader provides read-only cluster access for logs/metrics;
+// ghClientID/ghClientSecret are the GitHub OAuth App credentials for the
+// connect-and-list-repos flow (may be empty to disable it).
+func New(s *store.Store, a *auth.Authenticator, log *slog.Logger, webhookSecret string, reader *k8s.Reader, ghClientID, ghClientSecret string) *Server {
+	return &Server{
+		store:          s,
+		auth:           a,
+		log:            log,
+		webhookSecret:  webhookSecret,
+		reader:         reader,
+		ghClientID:     ghClientID,
+		ghClientSecret: ghClientSecret,
+	}
 }
 
 // Router returns the configured HTTP handler.
@@ -63,6 +75,12 @@ func (s *Server) Router() http.Handler {
 		r.Get("/v1/orgs/{orgID}/registry-credentials", s.handleListRegistryCreds)
 		r.Post("/v1/orgs/{orgID}/registry-credentials", s.handleAddRegistryCred)
 		r.Delete("/v1/orgs/{orgID}/registry-credentials/{credID}", s.handleDeleteRegistryCred)
+
+		// GitHub OAuth: connect an org's account, list repos for service creation.
+		r.Get("/v1/orgs/{orgID}/github", s.handleGithubStatus)
+		r.Post("/v1/orgs/{orgID}/github/connect", s.handleGithubConnect)
+		r.Get("/v1/orgs/{orgID}/github/repos", s.handleGithubRepos)
+		r.Delete("/v1/orgs/{orgID}/github", s.handleGithubDisconnect)
 
 		r.Get("/v1/orgs/{orgID}/members", s.handleListMembers)
 		r.Post("/v1/orgs/{orgID}/members", s.handleAddMember)

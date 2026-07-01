@@ -51,7 +51,7 @@ func run(log *slog.Logger) error {
 	}
 
 	authn := auth.New(st, cfg.SessionTTL)
-	srv := api.New(st, authn, log, cfg.GitHubWebhookSecret, reader)
+	srv := api.New(st, authn, log, cfg.GitHubWebhookSecret, reader, cfg.GitHubClientID, cfg.GitHubClientSecret)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
