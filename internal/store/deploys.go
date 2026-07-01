@@ -155,6 +155,40 @@ func (s *Store) UpdateDeployStatus(ctx context.Context, id int64, to string) (De
 	))
 }
 
+// QueuedDeployIDs returns the ids of deploys still waiting to build, oldest
+// first. Used to sweep work enqueued while the builder was down (NOTIFY only
+// delivers to a live listener).
+func (s *Store) QueuedDeployIDs(ctx context.Context) ([]int64, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id FROM deploys WHERE status = $1 ORDER BY id`, deploy.StatusQueued)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ClaimQueuedDeploy atomically transitions a queued deploy to building. It
+// returns false if the row was not queued (already claimed or gone), so a
+// concurrent NOTIFY and startup sweep can never double-process the same deploy.
+func (s *Store) ClaimQueuedDeploy(ctx context.Context, id int64) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE deploys SET status = $2, updated_at = now() WHERE id = $1 AND status = $3`,
+		id, deploy.StatusBuilding, deploy.StatusQueued)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // SetDeployImage records the built image reference for a deploy.
 func (s *Store) SetDeployImage(ctx context.Context, id int64, image string) error {
 	_, err := s.pool.Exec(ctx,

@@ -33,6 +33,18 @@ func New(st *store.Store, backend build.Builder, registry string, log *slog.Logg
 // goroutine. It blocks until ctx is cancelled or the listen connection fails.
 func (p *Processor) Run(ctx context.Context) error {
 	p.log.Info("builder listening for deploys", "channel", store.DeployChannel)
+
+	// Sweep anything queued while we were down — NOTIFY only reaches a live
+	// listener, so deploys enqueued before startup would otherwise stall forever.
+	if ids, err := p.store.QueuedDeployIDs(ctx); err != nil {
+		p.log.Error("sweep queued deploys", "err", err)
+	} else {
+		for _, id := range ids {
+			p.log.Info("resuming queued deploy", "deploy_id", id)
+			go p.process(ctx, id)
+		}
+	}
+
 	return p.store.Listen(ctx, store.DeployChannel, func(payload string) {
 		id, err := strconv.ParseInt(payload, 10, 64)
 		if err != nil {
@@ -67,9 +79,14 @@ func (p *Processor) process(ctx context.Context, deployID int64) {
 
 	image := fmt.Sprintf("%s/svc-%d:%d", p.registry, svc.ID, deployID)
 
-	// queued -> building
-	if _, err := p.store.UpdateDeployStatus(ctx, deployID, deploy.StatusBuilding); err != nil {
-		log.Error("transition to building", "err", err)
+	// queued -> building, atomically. If another worker/sweep already claimed
+	// it, stop here so the same deploy never builds twice.
+	claimed, err := p.store.ClaimQueuedDeploy(ctx, deployID)
+	if err != nil {
+		log.Error("claim deploy", "err", err)
+		return
+	}
+	if !claimed {
 		return
 	}
 	if err := p.store.StartBuild(ctx, b.ID, deploy.BuildRunning); err != nil {
